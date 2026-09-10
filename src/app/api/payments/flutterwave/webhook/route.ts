@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   if (!validSignature(raw, signature, request.headers.get("verif-hash"), secretHash)) return new Response("Invalid signature", { status: 401 });
   const payload = JSON.parse(raw);
   const transactionId = payload?.data?.id;
-  if (payload?.type !== "charge.completed" || !transactionId) return new Response("ok");
+  if (![payload?.type, payload?.event].includes("charge.completed") || !transactionId) return new Response("ok");
   const verifiedResponse = await fetch(`https://api.flutterwave.com/v3/transactions/${encodeURIComponent(String(transactionId))}/verify`, {
     headers: { Authorization: `Bearer ${secretKey}` }, cache: "no-store",
   });

@@ -228,7 +228,7 @@ npm test
 npm run build
 ```
 
-Last recorded checks (2026-09-09): build, lint and 10 local tests passed; TypeScript
+Last recorded checks (2026-09-10): build, lint and 12 local tests passed; TypeScript
 passed after the final route adjustment. Tests cover draft/validation guards,
 revision history, H3 contracts and a mocked provider request. Browser checks covered
 prompt-edit controls and locked clips, plus earlier workspace and responsive flows.

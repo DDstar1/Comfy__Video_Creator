@@ -1582,7 +1582,7 @@ function Workspace({
               ],
               [
                 "Make it part of the story",
-                "When generation is connected, watch each clip and validate it. Validated clips are permanently locked.",
+                "Generate and watch each clip, then validate it. Validated clips are permanently locked.",
               ],
             ].map(([title, text], i) => (
               <div key={title}>
@@ -1595,9 +1595,8 @@ function Workspace({
             ))}
           </div>
           <p className="small muted">
-            This version supports Supabase projects, image uploads, and AI
-            prompt planning and revisions. Video rendering still needs its
-            worker connection.
+            This version supports Supabase projects, image uploads, AI prompt
+            planning, prepaid credit and RunPod video rendering.
           </p>
           <button
             className="button primary full-width"
