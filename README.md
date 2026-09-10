@@ -1,36 +1,247 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ClipWeave Next.js application
 
-## Getting Started
+This folder contains both the customer frontend and the server-side AI prompt
+backend. It uses Next.js 16, React 19, TypeScript, Supabase, OpenAI, Zod and Lucide.
+See the [root README](../README.md) for overall status and [UI_PLAN.md](UI_PLAN.md)
+for the interface design.
 
-First, run the development server:
+## Current state
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+Projects, scene input, image-library/account forms and the clip editor are built.
+Luna planning and prompt-editing requests are wired to `POST /api/director` with the
+uploaded H3 Director skill. A live plan-and-revision request passed on 2026-09-10.
+
+The public ClipWeave launch page is at `/`; the creator workspace is at `/studio`.
+Visitors can create an account or sign in from the navigation, hero and footer.
+The shared auth dialog supports Google OAuth plus email/password signup with a
+name, password confirmation and visibility controls. Confirmed sessions continue
+to `/studio`; the waitlist remains a separate early-access registration.
+The landing page presents sequential clip validation as a core benefit: creators
+verify each clip before continuing so its approved ending guides the next scene.
+Supabase stores the waitlist, account reference library, projects, clips, project
+reference selections, prompt history, render jobs and generated-video metadata.
+`POST /api/renders` submits an authenticated API-format workflow to RunPod and
+`GET /api/renders?jobId=...` polls it, copies the completed video into permanent
+project storage, attaches it to its clip and marks that clip ready for validation.
+The Generate button assembles the H3 Extender workflow, uploads the current clip's
+ordered references, submits the job and polls every five seconds. It shows preparation,
+queue and generation states before enabling video validation. One live end-to-end
+render still needs verification.
+Reference stills and the sample validated clip
+are examples, not generated videos.
+
+The studio includes a prepaid USD wallet. Flutterwave top-ups start at $5. A render
+reserves $0.59, then settles the RunPod runtime at the configured hourly rate plus
+a $0.30 margin. Submission, generation and video-ingestion failures refund the
+reservation automatically.
+
+## Setup
+
+Use Node.js 22.18 or newer. Run commands from this folder:
+
+```powershell
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Create `.env` for a fresh checkout, or preserve the existing configuration:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```dotenv
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLIC_KEY
+CHATGPT_KEY=YOUR_OPENAI_API_KEY
+RUNPOD_ENDPOINT_API_KEY=YOUR_RUNPOD_API_KEY
+RUNPOD_ENDPOINT_ID=nqpfrj6twlaz5h
+SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVER_ONLY_SERVICE_ROLE_KEY
+FLW_SECRET_KEY=YOUR_FLUTTERWAVE_SECRET_KEY
+FLW_SECRET_HASH=YOUR_FLUTTERWAVE_WEBHOOK_SECRET
+RUNPOD_GPU_RATE_CENTS_PER_HOUR=58
+CLIPWEAVE_MARGIN_CENTS=30
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Only the Supabase URL/publishable key are browser configuration. `CHATGPT_KEY` and
+`RUNPOD_ENDPOINT_API_KEY` remains server-side. All `.env*` files are ignored; never expose a
+service-role, AI or RunPod key through a `NEXT_PUBLIC_` variable. Next.js loads
+`.env.local` ahead of `.env`.
 
-## Learn More
+```powershell
+npm run skill:upload
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+Open [localhost:3000](http://localhost:3000). The existing skill was successfully
+uploaded and its ID/version saved to ignored `.env.local`. The upload script exits
+without creating another skill when `OPENAI_DIRECTOR_SKILL_ID` is already set.
+Restart the server after environment changes.
+Configure Flutterwave's webhook as
+`https://clip-weave-omega.vercel.app/api/payments/flutterwave/webhook`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Enable Email and Google under Supabase Authentication providers. Add the deployed
+`https://YOUR_DOMAIN/studio` URL to the Supabase redirect allow list so Google
+OAuth can return users to the creator workspace; localhost is used during development.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Where prompts are edited
 
-## Deploy on Vercel
+### Customer controls
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Open **Project → Clips**:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Edit description → Update prompt** sends the readable edit for AI compilation.
+- **What would you like to change?** accepts a brief instruction; its arrow submits it.
+- **Compile/Recompile prompt** compiles the current description and any pending changes.
+
+The backend returns a synchronized description and technical H3 prompt. Successful
+revisions retain the previous compiled version in Supabase history and flag later draft
+clips for continuity review. Failed requests preserve pending edits. Validated clips
+have no editing controls. Because validation requires every earlier clip to be
+validated first, validating Clip N leaves Clips 1 through N read-only while later
+clips remain editable. Supabase enforces the same immutable validated-prefix rule.
+
+Choose **Create clip plan** on the Story tab for an empty project. Existing clips
+are revised individually. Only image references are supported; picture numbers map
+to each clip's ordered reference IDs. The customer editor hides technical prompts,
+but downloaded draft backups include them and their history.
+
+### Developer files
+
+| File                                                                                                                     | Edit here for                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| [src/lib/server/director.ts](src/lib/server/director.ts)                                                                 | Developer instructions, model settings, OpenAI call and hosted skill attachment |
+| [skills/minimax-h3-extender-sequential-director/SKILL.md](skills/minimax-h3-extender-sequential-director/SKILL.md)       | H3 directing rules                                                              |
+| [skills/minimax-h3-extender-sequential-director/references/](skills/minimax-h3-extender-sequential-director/references/) | Base, full-reference and Extender continuity guides                             |
+| [src/lib/director-contract.ts](src/lib/director-contract.ts)                                                             | Request/output schemas, section-order and reference validation                  |
+| [src/app/api/director/route.ts](src/app/api/director/route.ts)                                                           | Endpoint auth, limits and errors                                                |
+| [src/components/studio.tsx](src/components/studio.tsx)                                                                   | Prompt editor, API submission and Supabase persistence                          |
+| [src/app/page.tsx](src/app/page.tsx)                                                                                     | ClipWeave launch page                                                           |
+| [src/components/waitlist.tsx](src/components/waitlist.tsx)                                                               | Waitlist registration and masked queue                                          |
+| [src/lib/studio-model.ts](src/lib/studio-model.ts)                                                                       | Revision history, continuity flags and clip locking guards                      |
+
+Generated prompts live in project data, not in `director.ts` or `SKILL.md`.
+
+## RunPod boundary
+
+The deployed Queue endpoint is `my_extender_endpoint` with ID
+`nqpfrj6twlaz5h`. Its asynchronous submission URL is
+`https://api.runpod.ai/v2/nqpfrj6twlaz5h/run`, and job status is read from
+`https://api.runpod.ai/v2/nqpfrj6twlaz5h/status/{job_id}`. Only a server route may
+attach the bearer API key.
+
+The render route derives the project-specific cache namespace from the verified
+Supabase user and the owned project. The browser cannot choose the namespace.
+
+The separate worker image accepts a ComfyUI API workflow in `input.workflow` and
+optional base64 reference images in `input.images`. It returns final MP4/MKV files
+in `output.videos`. `src/lib/render-workflow.ts` builds that workflow with the
+deployed model names, the validated prefix plus current clip, ordered image inputs,
+four-step Turbo LoRA settings and a 0.2 MP draft canvas. Submission, polling and
+permanent result storage are implemented.
+
+Every request includes `input.cache_namespace`. The server route derives it from
+the verified Supabase user and owned project as
+`${user.id}:${project.id}`. The browser must not supply the authoritative user ID.
+Keeping this value stable lets later jobs reuse validated clips; different projects
+are isolated into different hashed directories on the Network Volume.
+
+`RUNPOD_ENDPOINT_API_KEY` remains in server environment variables. It must not
+use a `NEXT_PUBLIC_` name or be sent to browser code. Worker setup and the request
+contract are documented in
+[RUNPOD_SERVERLESS.md](../runpod-worker-repo/RUNPOD_SERVERLESS.md).
+
+The live endpoint uses the published GHCR image, `EU-RO-1` and Network Volume
+`0oaqjjkos5`. It currently has minimum workers `0`, maximum workers `3`, a
+five-second idle timeout and a ten-minute job timeout. Raise the job timeout to at
+least 30 minutes before 0.4 MP renders, which measured 17m 6s on the test Pod. A
+roughly 300-second idle timeout is recommended for sequential clips. The endpoint
+has not yet completed a billable API render.
+
+The partial unique index on `comfyTR_render_jobs` permits only one active render per
+project, while different projects may use the endpoint's workers concurrently.
+
+Completed MP4/MKV/WebM/MOV results are copied from RunPod into the private
+`comfytr-generated-videos` bucket at
+`<user>/<project>/<clip>/<asset>.<extension>`. Publishing a replacement archives
+the previous active asset record and atomically sets `comfyTR_clips.video_url` and
+status `ready`. Account-scoped signed URLs provide one-hour previews. Archived objects are retained for safe recovery. Validation remains
+disabled until the permanent URL is attached, and validated clips reject replacements.
+
+## Updating the hosted skill
+
+Editing local skill files does **not** update the uploaded skill automatically.
+The current [upload script](scripts/upload-director-skill.mjs) creates a replacement
+skill; it does not publish a new version of an existing skill ID.
+
+For the supported replacement flow:
+
+1. Edit the bundle under `skills/minimax-h3-extender-sequential-director/`.
+2. Record the current skill ID/version if you need to roll back.
+3. Remove `OPENAI_DIRECTOR_SKILL_ID` and `OPENAI_DIRECTOR_SKILL_VERSION` from local
+   env configuration and unset any shell overrides for those variables.
+4. Run `npm run skill:upload`. It uploads the local bundle and writes the replacement
+   ID/version to `.env.local`. The previous hosted skill is not deleted.
+5. Restart the server and, when API credits are available, run the live check below.
+
+Changing the developer instructions in `src/lib/server/director.ts` requires no
+skill upload. Deploy/restart the application as appropriate for the environment.
+
+## API behavior and limits
+
+`POST /api/director` accepts `action: "plan"` or `"revise"`, project context,
+references and a `clipId` for revision. The server uses `CHATGPT_KEY` with
+`gpt-5.6-luna`, medium verbosity/reasoning, standard mode, automatic reasoning
+summary and `store: true`. It keeps the requested reasoning/source includes.
+
+The pinned skill is attached through hosted shell with network access disabled.
+Its version is serialized as a string for the installed SDK. Project context and
+public reference images are sent to OpenAI; raw reasoning is not returned to the UI.
+
+Limits: 12 clips, 9 selected project images, 50,000 story characters and a 500 KB
+request. The account image library has no nine-image cap. The response must satisfy
+the JSON/H3 contract; these checks do not validate execution on a ComfyUI worker.
+
+Same-origin requests are required. Development on loopback permits guests;
+production requires a verified Supabase bearer session. Throttling and overlapping
+request prevention are per process. Durable project state, database locks,
+distributed quotas and long-running job management remain deployment work.
+
+## Other frontend features
+
+- Projects: grid/list, search, draft/example filters and project creation.
+- Story: TXT/Markdown import up to 2 MiB, mentions, aspect ratio and visual direction.
+- References: account library, previews and public JPEG/PNG/WebP uploads up to 20 MiB.
+- Account: Supabase email/password sign-in, registration and sign-out.
+- Navigation: URL fragments, keyboard tabs, native dialogs and responsive drawer.
+
+The frontend uses `comfyTR_reference_images` and `comfytr-reference-images`.
+Project selections currently remain local despite the database relationship tables
+being available. Uploads use immutable paths; metadata failures after file upload
+are surfaced, and orphan cleanup remains backend work. See [Supabase docs](../supabase/README.md).
+
+Other implementation files: [studio-forms.tsx](src/components/studio-forms.tsx),
+[ui.tsx](src/components/ui.tsx), [supabase.ts](src/lib/supabase.ts), and
+[studio.css](src/app/studio.css). Geist fonts load from the pinned Next.js package.
+Sample images use public Unsplash URLs with fallback UI.
+
+## Verification
+
+```powershell
+npm run lint
+npm test
+npm run build
+```
+
+Last recorded checks (2026-09-09): build, lint and 10 local tests passed; TypeScript
+passed after the final route adjustment. Tests cover draft/validation guards,
+revision history, H3 contracts and a mocked provider request. Browser checks covered
+prompt-edit controls and locked clips, plus earlier workspace and responsive flows.
+The built browser assets were checked for key exposure; `CHATGPT_KEY` was absent.
+Authenticated image upload still needs end-to-end verification.
+
+Optional live check, which makes real API requests:
+
+```powershell
+npm run test:director:live
+```
+
+It plans a short scene and revises it, saving `.director-smoke.json` only on success.
+The artifact is ignored. The 2026-09-10 run produced one valid T2VA clip and a
+changed revision using hosted skill version 1. The live check is separate from the
+local test suite.

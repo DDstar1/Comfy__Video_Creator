@@ -1,69 +1,265 @@
-import Image from "next/image";
+import {
+  ArrowRight,
+  BookOpenText,
+  Check,
+  Clapperboard,
+  Globe2,
+  ImagePlus,
+  LockKeyhole,
+  Sparkles,
+} from "lucide-react";
+import Waitlist from "@/components/waitlist";
+import LandingAuthButton from "@/components/landing-auth-button";
+import LandingNav from "@/components/landing-nav";
+import styles from "./landing.module.css";
+
+const steps = [
+  [
+    BookOpenText,
+    "Bring your story",
+    "Paste a scene from your book or describe the video in your head.",
+  ],
+  [
+    ImagePlus,
+    "Add your references",
+    "Upload characters, places and objects once, then mention them by name.",
+  ],
+  [
+    Sparkles,
+    "Shape every clip",
+    "Review simple descriptions while ClipWeave prepares the technical video workflow.",
+  ],
+  [
+    Clapperboard,
+    "Approve and continue",
+    "Verify each clip before the next one begins, so the story carries forward smoothly.",
+  ],
+] as const;
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
+    <main className={styles.page}>
+      <LandingNav />
+
+      <section className={styles.hero}>
+        <div className={styles.heroCopy}>
+          <p className={styles.eyebrow}>
+            <span /> Built for Nigerian storytellers
+          </p>
+          <h1>
+            Turn your story into a <em>3-minute cinematic video.</em>
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className={styles.lede}>
+            Bring a book scene, script or simple idea. ClipWeave helps you plan
+            every shot, keep your characters consistent and generate the
+            finished story.
+          </p>
+          <div className={styles.heroOffer}>
+            <div>
+              <small>Launch pricing from</small>
+              <strong>₦1,500</strong>
+            </div>
+            <span>Launching 17 September 2026</span>
+          </div>
+          <div className={styles.heroActions}>
+            <LandingAuthButton className={styles.primary}>
+              Create free account <ArrowRight size={18} />
+            </LandingAuthButton>
+            <a href="#how-it-works" className={styles.secondary}>
+              See how it works
+            </a>
+          </div>
+          <p className={styles.fine}>
+            <Check size={15} /> Create your account now, then join the launch
+            list below for early-access benefits.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        <div
+          className={styles.heroVisual}
+          aria-label="An illustrated ClipWeave clip sequence"
+        >
+          <div className={styles.filmFrame}>
+            <div className={styles.sceneGlow} />
+            <span className={styles.frameNumber}>01</span>
+            <div className={styles.sceneText}>
+              <small>YOUR STORY</small>
+              <strong>
+                A quiet street.
+                <br />
+                One impossible light.
+              </strong>
+            </div>
+          </div>
+          <div className={styles.timeline}>
+            {["Scene", "References", "Clips", "Video"].map((item, index) => (
+              <div key={item} className={index === 2 ? styles.activeStep : ""}>
+                <span>{index + 1}</span>
+                {item}
+              </div>
+            ))}
+          </div>
+          <div className={styles.promptCard}>
+            <Sparkles size={17} />
+            <div>
+              <small>CLIPWEAVE DIRECTOR</small>
+              <p>
+                “Keep Ada’s face and red headwrap consistent as the camera
+                moves…”
+              </p>
+            </div>
+          </div>
         </div>
-      </main>
-    </div>
+      </section>
+
+      <section className={styles.proofStrip} aria-label="Product benefits">
+        <span>
+          <LockKeyhole size={17} /> Verify every clip before moving on
+        </span>
+        <span>
+          <ImagePlus size={17} /> Reuse reference images
+        </span>
+        <span>
+          <Globe2 size={17} /> Nigeria first, built for the world
+        </span>
+      </section>
+
+      <section className={styles.how} id="how-it-works">
+        <div className={styles.sectionHeading}>
+          <p className={styles.eyebrow}>
+            <span /> From words to motion
+          </p>
+          <h2>
+            Your story stays yours.
+            <br />
+            The complicated workflow disappears.
+          </h2>
+        </div>
+        <div className={styles.stepGrid}>
+          {steps.map(([Icon, title, copy], index) => (
+            <article key={title}>
+              <div className={styles.stepTop}>
+                <Icon size={23} />
+                <span>0{index + 1}</span>
+              </div>
+              <h3>{title}</h3>
+              <p>{copy}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className={styles.feature}>
+        <div className={styles.referenceWall}>
+          <div
+            className={`${styles.referencePhoto} ${styles.refOne}`}
+            role="img"
+            aria-label="Ada character reference"
+          >
+            <span>
+              <small>Character</small>@Ada
+            </span>
+          </div>
+          <div
+            className={`${styles.referencePhoto} ${styles.refTwo}`}
+            role="img"
+            aria-label="Lagos at night location reference"
+          >
+            <span>
+              <small>Location</small>@LagosNight
+            </span>
+          </div>
+          <div
+            className={`${styles.referencePhoto} ${styles.refThree}`}
+            role="img"
+            aria-label="Blue vintage car reference"
+          >
+            <span>
+              <small>Object</small>@BlueCar
+            </span>
+          </div>
+          <div className={styles.referenceFlow} aria-hidden="true">
+            <ArrowRight size={17} />
+          </div>
+          <div
+            className={`${styles.referencePhoto} ${styles.refResult}`}
+            role="img"
+            aria-label="Cinematic result showing Ada with the blue car in Lagos at night"
+          >
+            <span>
+              <small>Generated frame</small>Cinematic result
+            </span>
+          </div>
+        </div>
+        <div className={styles.featureCopy}>
+          <p className={styles.eyebrow}>
+            <span /> Visual continuity
+          </p>
+          <h2>
+            Upload once.
+            <br />
+            Keep every detail familiar.
+          </h2>
+          <p>
+            Your account keeps a reusable image library. Add references to a
+            project and mention <code>@Ada</code> or <code>@LagosNight</code>{" "}
+            naturally inside your scene.
+          </p>
+          <div className={styles.continuityPromise}>
+            <strong>No sudden skips. No unexplained changes.</strong>
+            <span>
+              You verify each clip before ClipWeave creates the next, giving
+              every scene a clear visual starting point.
+            </span>
+          </div>
+          <ul>
+            <li>
+              <Check size={16} /> Characters remain recognisable between clips
+            </li>
+            <li>
+              <Check size={16} /> Locations and important objects stay
+              consistent
+            </li>
+            <li>
+              <Check size={16} /> Each approved ending guides the next clip—no
+              sudden jumps
+            </li>
+            <li>
+              <Check size={16} /> Your approved clips cannot be accidentally
+              rewritten
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section className={styles.waitlistSection} id="waitlist">
+        <div className={styles.waitlistIntro}>
+          <p className={styles.eyebrow}>
+            <span /> Private early access
+          </p>
+          <h2>Be there when the first story begins.</h2>
+          <p>
+            Join the launch list for early access on 17 September. Your email
+            appears publicly only in a masked form, so you can see your real
+            position without exposing your address.
+          </p>
+          <div className={styles.discount}>
+            <strong>20% off</strong>
+            <span>for the first 10 customers</span>
+          </div>
+        </div>
+        <Waitlist />
+      </section>
+
+      <footer className={styles.footer}>
+        <div className={styles.brand}>
+          <span className={styles.brandMark}>C</span>Clip<span>Weave</span>
+        </div>
+        <p>Stories deserve to move.</p>
+        <LandingAuthButton mode="signin">
+          Creator sign in <ArrowRight size={15} />
+        </LandingAuthButton>
+      </footer>
+    </main>
   );
 }

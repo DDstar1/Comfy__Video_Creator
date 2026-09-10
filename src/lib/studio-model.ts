@@ -1,0 +1,264 @@
+import type { GeneratedClip } from "./director-contract.ts";
+
+export type ReferenceImage = {
+  id: string;
+  name: string;
+  description: string;
+  url: string;
+  category: "Character" | "Location" | "Object" | "Image";
+  sample?: boolean;
+};
+export type Clip = {
+  id: string;
+  title: string;
+  description: string;
+  duration: number;
+  referenceIds: string[];
+  status: "draft" | "ready" | "validated";
+  image: string;
+  videoUrl?: string;
+  videoStoragePath?: string;
+  requestedChange?: string;
+  pendingDescription?: string;
+  technicalPrompt?: string;
+  mode?: "T2VA" | "Ref2VA";
+  endState?: string;
+  continuityStale?: boolean;
+  revision?: number;
+  responseId?: string;
+  promptHistory?: {
+    description: string;
+    technicalPrompt: string;
+    referenceIds: string[];
+    duration: number;
+    endState?: string;
+    savedAt: string;
+  }[];
+};
+export type Project = {
+  id: string;
+  title: string;
+  story: string;
+  ratio: "16:9" | "9:16" | "1:1";
+  style: string;
+  image: string;
+  referenceIds: string[];
+  clips: Clip[];
+  updatedAt: string;
+  sample?: boolean;
+};
+export const FOREST =
+  "https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1600&q=85";
+export const PATH =
+  "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1100&q=85";
+export const MOUNTAIN =
+  "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1000&q=85";
+export const sampleReferences: ReferenceImage[] = [
+  {
+    id: "ref-elena",
+    name: "Elena",
+    category: "Character",
+    description:
+      "Our protagonist. Curious, quietly determined, and drawn to the unknown.",
+    url: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=85",
+    sample: true,
+  },
+  {
+    id: "ref-forest",
+    name: "WhisperingForest",
+    category: "Location",
+    description:
+      "An ancient evergreen forest. Tall trees, soft mist, and scattered morning light.",
+    url: FOREST,
+    sample: true,
+  },
+  {
+    id: "ref-book",
+    name: "OldJournal",
+    category: "Object",
+    description: "A worn journal that holds the clues to a forgotten story.",
+    url: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&w=600&q=85",
+    sample: true,
+  },
+  {
+    id: "ref-mountain",
+    name: "NorthernPeaks",
+    category: "Location",
+    description: "A distant mountain range beyond the edge of the forest.",
+    url: MOUNTAIN,
+    sample: true,
+  },
+];
+export function createSampleProject(): Project {
+  return {
+    id: "sample-forest",
+    title: "Where the forest remembers",
+    story:
+      "At the edge of the @WhisperingForest, @Elena pauses. The trees are older than the stories her grandmother used to tell. She opens the @OldJournal, its pages catching the first light of morning. A narrow path disappears into the mist. Somewhere beyond the trees, something is waiting to be found.",
+    ratio: "16:9",
+    style: "Cinematic",
+    image: FOREST,
+    referenceIds: ["ref-elena", "ref-forest", "ref-book"],
+    sample: true,
+    updatedAt: "2026-09-09T09:00:00.000Z",
+    clips: [
+      {
+        id: "clip-1",
+        title: "The forest wakes",
+        description:
+          "Morning mist drifts between ancient trees in @WhisperingForest. The camera slowly moves forward through the stillness, as soft sunlight finds its way through the canopy. A distant birdsong breaks the silence.",
+        duration: 5,
+        referenceIds: ["ref-forest"],
+        status: "validated",
+        image: FOREST,
+      },
+      {
+        id: "clip-2",
+        title: "A step into the unknown",
+        description:
+          "@Elena stands at the edge of @WhisperingForest, the @OldJournal held close to her chest. She takes a slow breath and steps onto the narrow path. The camera follows gently behind her, revealing the towering trees ahead. The mood is quiet, curious, and full of possibility.",
+        duration: 5,
+        referenceIds: ["ref-elena", "ref-forest", "ref-book"],
+        status: "draft",
+        image: PATH,
+      },
+      {
+        id: "clip-3",
+        title: "Between the pages",
+        description:
+          "A close view of @Elena opening the @OldJournal. Her fingers trace a faded drawing as dappled light moves across the paper. The forest falls softly out of focus behind her.",
+        duration: 5,
+        referenceIds: ["ref-elena", "ref-book"],
+        status: "draft",
+        image: sampleReferences[2].url,
+      },
+      {
+        id: "clip-4",
+        title: "The path remembers",
+        description:
+          "The camera moves past @Elena to reveal a winding path through @WhisperingForest. Mist begins to lift. She closes the journal and walks toward the light, her footsteps soft against the earth.",
+        duration: 5,
+        referenceIds: ["ref-elena", "ref-forest"],
+        status: "draft",
+        image: FOREST,
+      },
+    ],
+  };
+}
+export function updateClip(
+  project: Project,
+  id: string,
+  patch: Partial<Clip>,
+): Project {
+  const clip = project.clips.find((c) => c.id === id);
+  if (!clip || clip.status === "validated") return project;
+  const { status: _status, id: _id, ...editable } = patch;
+  void _status;
+  void _id;
+  return {
+    ...project,
+    updatedAt: new Date().toISOString(),
+    clips: project.clips.map((c) =>
+      c.id === id
+        ? {
+            ...c,
+            ...editable,
+            ...(patch.duration !== undefined || patch.referenceIds !== undefined
+              ? { continuityStale: true }
+              : {}),
+          }
+        : c,
+    ),
+  };
+}
+export function validateClip(project: Project, id: string): Project {
+  const index = project.clips.findIndex((c) => c.id === id);
+  const clip = project.clips[index];
+  if (
+    !clip ||
+    clip.status !== "ready" ||
+    !clip.videoUrl ||
+    clip.pendingDescription ||
+    clip.requestedChange ||
+    clip.continuityStale ||
+    project.clips.slice(0, index).some((c) => c.status !== "validated")
+  )
+    return project;
+  return {
+    ...project,
+    updatedAt: new Date().toISOString(),
+    clips: project.clips.map((c) =>
+      c.id === id ? { ...c, status: "validated" } : c,
+    ),
+  };
+}
+export function canChangeProjectSettings(project: Project) {
+  return !project.clips.some((c) => c.status === "validated");
+}
+export function newProject(title: string, story: string): Project {
+  return {
+    id: crypto.randomUUID(),
+    title,
+    story,
+    ratio: "16:9",
+    style: "Cinematic",
+    image: "",
+    referenceIds: [],
+    clips: [],
+    updatedAt: new Date().toISOString(),
+  };
+}
+export function newClip(index: number): Clip {
+  return {
+    id: crypto.randomUUID(),
+    title: `Clip ${String(index + 1).padStart(2, "0")}`,
+    description: "",
+    duration: 5,
+    referenceIds: [],
+    status: "draft",
+    image: "",
+  };
+}
+
+export function applyCompiledClip(
+  project: Project,
+  id: string,
+  result: GeneratedClip,
+  responseId: string,
+): Project {
+  const index = project.clips.findIndex((c) => c.id === id);
+  const current = project.clips[index];
+  if (!current || current.status === "validated") return project;
+  const history = [...(current.promptHistory ?? [])];
+  if (current.technicalPrompt)
+    history.push({
+      description: current.description,
+      technicalPrompt: current.technicalPrompt,
+      referenceIds: current.referenceIds,
+      duration: current.duration,
+      endState: current.endState,
+      savedAt: new Date().toISOString(),
+    });
+  return {
+    ...project,
+    updatedAt: new Date().toISOString(),
+    clips: project.clips.map((clip, i) => {
+      if (i === index)
+        return {
+          ...clip,
+          ...result,
+          status: "draft",
+          videoUrl: undefined,
+          pendingDescription: undefined,
+          requestedChange: undefined,
+          continuityStale: false,
+          revision: (clip.revision ?? 0) + 1,
+          responseId,
+          promptHistory: history,
+        };
+      if (i > index && clip.status !== "validated")
+        return { ...clip, continuityStale: true };
+      return clip;
+    }),
+  };
+}

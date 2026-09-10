@@ -1,0 +1,13 @@
+interface:
+  display_name: MiniMax H3 Extender Director
+  short_description: Official H3 prompts with continuous Extender logic
+  default_prompt: Use $minimax-h3-extender-sequential-director to write this MiniMax H3 or H3 Extender prompt using the official mode structure and strict continuity.
+  icon_small: assets/icon.svg
+  icon_large: assets/icon.svg
+policy:
+  products:
+  - chatgpt
+  - codex
+  - api
+  - atlas
+  allow_implicit_invocation: true
