@@ -30,7 +30,7 @@ render still needs verification.
 Reference stills and the sample validated clip
 are examples, not generated videos.
 
-The studio includes a prepaid USD wallet. Flutterwave top-ups start at $5. A render
+The studio includes a prepaid USD wallet. Creem top-ups start at $5. A render
 reserves $0.59, then settles the RunPod runtime at the configured hourly rate plus
 a $0.30 margin. Submission, generation and video-ingestion failures refund the
 reservation automatically.
@@ -52,8 +52,10 @@ CHATGPT_KEY=YOUR_OPENAI_API_KEY
 RUNPOD_ENDPOINT_API_KEY=YOUR_RUNPOD_API_KEY
 RUNPOD_ENDPOINT_ID=nqpfrj6twlaz5h
 SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVER_ONLY_SERVICE_ROLE_KEY
-FLW_SECRET_KEY=YOUR_FLUTTERWAVE_SECRET_KEY
-FLW_SECRET_HASH=YOUR_FLUTTERWAVE_WEBHOOK_SECRET
+CREEM_API_KEY=YOUR_CREEM_API_KEY
+CREEM_WEBHOOK_SECRET=YOUR_CREEM_WEBHOOK_SECRET
+CREEM_WALLET_PRODUCT_ID=YOUR_ONE_TIME_PRODUCT_ID
+CREEM_TEST_MODE=true
 RUNPOD_GPU_RATE_CENTS_PER_HOUR=58
 CLIPWEAVE_MARGIN_CENTS=30
 ```
@@ -72,8 +74,8 @@ Open [localhost:3000](http://localhost:3000). The existing skill was successfull
 uploaded and its ID/version saved to ignored `.env.local`. The upload script exits
 without creating another skill when `OPENAI_DIRECTOR_SKILL_ID` is already set.
 Restart the server after environment changes.
-Configure Flutterwave's webhook as
-`https://clip-weave-omega.vercel.app/api/payments/flutterwave/webhook`.
+Configure Creem's webhook as
+`https://clip-weave-omega.vercel.app/api/payments/creem/webhook`.
 
 Enable Email and Google under Supabase Authentication providers. Add the deployed
 `https://YOUR_DOMAIN/studio` URL to the Supabase redirect allow list so Google

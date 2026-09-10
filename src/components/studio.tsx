@@ -1860,7 +1860,7 @@ function WalletDialog({ balanceCents, reservedCents, onClose, onRefresh }: {
     try {
       const { data } = await supabase!.auth.getSession();
       if (!data.session) throw new Error("Sign in to add funds.");
-      const response = await fetch("/api/payments/flutterwave", {
+      const response = await fetch("/api/payments/creem", {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session.access_token}` },
         body: JSON.stringify({ amountUsd: Number(amount) }),
       });
