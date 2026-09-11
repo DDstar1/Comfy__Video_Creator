@@ -415,7 +415,7 @@ export function UploadForm({
       reader.onload = () => {
         setPreview(String(reader.result));
         setFile(next);
-        setName(
+        setName((current) => current ||
           next.name
             .replace(/\.[^.]+$/, "")
             .replace(/[^\p{L}\p{N}_]/gu, "")

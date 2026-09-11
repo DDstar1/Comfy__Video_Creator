@@ -1,8 +1,10 @@
 import OpenAI from "openai";
+import { zodTextFormat } from "openai/helpers/zod";
 import type { ResponseInput } from "openai/resources/responses/responses";
 import {
   checkDirectorInput,
   parseDirectorOutput,
+  directorOutputSchema,
   type DirectorInput,
 } from "../director-contract.ts";
 
@@ -76,7 +78,7 @@ export async function runDirector(input: DirectorInput, signal?: AbortSignal) {
     {
       model: "gpt-5.6-luna",
       input: content,
-      text: { format: { type: "text" }, verbosity: "medium" },
+      text: { format: zodTextFormat(directorOutputSchema, "clip_plan"), verbosity: "medium" },
       reasoning: { effort: "medium", mode: "standard", summary: "auto" },
       tools: [
         {
