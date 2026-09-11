@@ -131,6 +131,12 @@ function Workspace({
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [ready, setReady] = useState(false);
   const saveQueue = useRef(Promise.resolve());
+  // Last state known to match the database, keyed by project id. Project
+  // objects are replaced immutably on edit, so identity is the change signal.
+  // Without this the autosave rewrote every project whenever the reference
+  // library finished loading, letting one project's incomplete in-memory state
+  // reach the database with no user action.
+  const persisted = useRef(new Map<string, Project>());
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
@@ -227,7 +233,11 @@ function Workspace({
     });
     void loadAccountProjects(supabase, user.id)
       .then((saved) => {
-        if (active) setProjects([...saved, createSampleProject()]);
+        if (!active) return;
+        // Freshly loaded projects already match the database; recording them
+        // here keeps the autosave from rewriting them on the next render.
+        persisted.current = new Map(saved.map((item) => [item.id, item]));
+        setProjects([...saved, createSampleProject()]);
       })
       .catch((error: unknown) => {
         if (active)
@@ -248,12 +258,17 @@ function Workspace({
   useEffect(() => {
     if (!ready || !user || !supabase) return;
     const client = supabase;
-    const accountProjects = projects.filter((item) => !item.sample);
+    const changed = projects.filter(
+      (item) => !item.sample && persisted.current.get(item.id) !== item,
+    );
+    if (!changed.length) return;
     const timer = setTimeout(() => {
       saveQueue.current = saveQueue.current
         .then(async () => {
-          for (const item of accountProjects)
+          for (const item of changed) {
             await saveAccountProject(client, user.id, item, references);
+            persisted.current.set(item.id, item);
+          }
         })
         .then(() => setSaveError(""))
         .catch((error: unknown) =>

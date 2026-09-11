@@ -212,17 +212,34 @@ export async function saveAccountProject(
     if (deleted.error) throw deleted.error;
   }
 
-  const cleared = await client
+  // Sync by difference. Deleting every link and re-inserting meant a save that
+  // carried an empty selection wiped the rows and put nothing back, so an
+  // unrelated save could destroy a project's references.
+  const existingRefs = await client
     .from(PROJECT_REFERENCE_TABLE)
-    .delete()
+    .select("reference_image_id")
     .eq("project_id", project.id);
-  if (cleared.error) throw cleared.error;
-  if (project.referenceIds.length) {
+  if (existingRefs.error) throw existingRefs.error;
+  const linkedIds = new Set(
+    (existingRefs.data ?? []).map((row) => String(row.reference_image_id)),
+  );
+  const wanted = new Set(project.referenceIds);
+  const droppedIds = [...linkedIds].filter((id) => !wanted.has(id));
+  const addedIds = project.referenceIds.filter((id) => !linkedIds.has(id));
+  if (droppedIds.length) {
+    const dropped = await client
+      .from(PROJECT_REFERENCE_TABLE)
+      .delete()
+      .eq("project_id", project.id)
+      .in("reference_image_id", droppedIds);
+    if (dropped.error) throw dropped.error;
+  }
+  if (addedIds.length) {
     const names = new Map(
       references.map((reference) => [reference.id, reference.name]),
     );
     const linked = await client.from(PROJECT_REFERENCE_TABLE).insert(
-      project.referenceIds.map((referenceId) => ({
+      addedIds.map((referenceId) => ({
         project_id: project.id,
         reference_image_id: referenceId,
         owner_id: ownerId,
