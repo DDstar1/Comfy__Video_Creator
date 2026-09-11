@@ -282,3 +282,12 @@ It plans a short scene and revises it, saving `.director-smoke.json` only on suc
 The artifact is ignored. The 2026-09-10 run produced one valid T2VA clip and a
 changed revision using hosted skill version 1. The live check is separate from the
 local test suite.
+
+## Reproducing the end-to-end test
+
+See the [Claude Code end-to-end runbook](docs/e2e/README.md) for exact setup,
+fixture, reference paths, browser steps, acceptance checks and debugging entry points.
+Latest checkpoint: local Google sign-in and project loading passed. The connected
+local prompt-revision retry still returned invalid model output after the schema
+change; parser diagnostics are the next step. No render for this project has yet
+been submitted. Preserve the existing four-by-five-second project (20 seconds).

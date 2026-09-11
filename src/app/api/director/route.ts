@@ -100,6 +100,14 @@ export async function POST(request: Request) {
     return Response.json(await runDirector(input, request.signal));
   } catch (error) {
     if (error instanceof OpenAI.APIError) {
+      if (process.env.NODE_ENV === "development") {
+        console.error("Director provider failure", {
+          type: error.name,
+          status: error.status,
+          code: error.code,
+          requestId: error.request_id,
+        });
+      }
       // Do not send provider request bodies, prompts or credentials to logs or clients.
       const status = error.status === 429 ? 429 : 502;
       return Response.json(
