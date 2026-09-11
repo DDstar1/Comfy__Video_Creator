@@ -5,6 +5,43 @@ backend. It uses Next.js 16, React 19, TypeScript, Supabase, OpenAI, Zod and Luc
 See the [root README](../README.md) for overall status and [UI_PLAN.md](UI_PLAN.md)
 for the interface design.
 
+## End-to-end test checkpoint — 2026-09-11
+
+Testing is in progress; this is not a claim that video generation passes.
+
+- Production Google sign-in works on `www.clipweave.xyz`.
+- The verified owner account has unlimited platform generation credit. This is
+  enforced server-side by `billing-access.ts`; other users retain normal wallet
+  reservations. RunPod/OpenAI provider charges still apply. No top-up was made.
+- Project persistence now uses explicit inserts and mutable-column updates rather
+  than upserts containing protected identity columns (commit `2c04a3a`).
+- Owner billing access shipped in `a4d2e94` and was visible in the live wallet.
+- Created **Red Signal — Fracture — 20 second test**, project
+  `b60e775c-2c0f-479d-a134-96575fa26bc2`, based on physical PDF pages 1–3 of
+  *Red Signal: Echo of a Lie, Act 2*. User limit: no project over 20 seconds.
+- Uploaded and attached seven supplied images: Lyra, Tomas, Sayen, Wren,
+  Infirmary, BaseCorridor and TrainingVault. Project, story and reference
+  selections persisted after a full browser reload.
+- Live director planning produced four five-second Ref2VA clips: Lyra Wakes,
+  Blackout Confrontation, Directed Memory and Neural Strip, totaling 20 seconds.
+- Editing the first readable prompt failed with an invalid model-output error;
+  the original prompt was preserved. Exact malformed field was not captured.
+  Commit `507d32d` requests strict JSON schema output using `zodTextFormat`
+  while retaining H3 semantic/reference validation. It also preserves an entered
+  reference name when asynchronous image loading completes. Build and all 13
+  tests passed; Vercel reported the deployment READY. Live revision retry remains.
+- Testing moved to local Next.js for faster server logs and iteration. Run
+  `npm run dev -- --hostname 127.0.0.1 --port 3000` from `frontend`; open
+  `http://localhost:3000/studio`. Localhost requires its own login and an allowed
+  Supabase redirect to `http://localhost:3000/studio`. Use the existing project;
+  do not create a duplicate or expand its duration.
+- Local testing uses the configured remote Supabase, OpenAI and RunPod services:
+  writes are real and inference is billable. No mock render has been substituted.
+- Remaining: successful readable edit and brief change request, persisted prompt
+  history, first playable RunPod output, storage/preview verification, validation
+  locks and continuation into the next clip. Creem payment is outside this test.
+
+
 ## Current state
 
 Projects, scene input, image-library/account forms and the clip editor are built.
@@ -150,10 +187,8 @@ contract are documented in
 
 The live endpoint uses the published GHCR image, `EU-RO-1` and Network Volume
 `0oaqjjkos5`. It currently has minimum workers `0`, maximum workers `3`, a
-five-second idle timeout and a ten-minute job timeout. Raise the job timeout to at
-least 30 minutes before 0.4 MP renders, which measured 17m 6s on the test Pod. A
-roughly 300-second idle timeout is recommended for sequential clips. The endpoint
-has not yet completed a billable API render.
+300-second idle timeout and a 30-minute job timeout (last recorded 2026-09-11).
+A playable endpoint render remains unverified.
 
 The partial unique index on `comfyTR_render_jobs` permits only one active render per
 project, while different projects may use the endpoint's workers concurrently.
@@ -235,7 +270,7 @@ passed after the final route adjustment. Tests cover draft/validation guards,
 revision history, H3 contracts and a mocked provider request. Browser checks covered
 prompt-edit controls and locked clips, plus earlier workspace and responsive flows.
 The built browser assets were checked for key exposure; `CHATGPT_KEY` was absent.
-Authenticated image upload still needs end-to-end verification.
+Authenticated upload of seven real images and persistence after reload passed on 2026-09-11.
 
 Optional live check, which makes real API requests:
 
