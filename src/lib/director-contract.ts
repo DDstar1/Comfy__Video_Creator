@@ -129,10 +129,10 @@ export function parseDirectorOutput(raw: string, input: DirectorInput) {
     }
     if (/<(?:Video|Audio) \d+>/.test(clip.technicalPrompt))
       throw new Error("Only image references are supported.");
-    for (let i = 1; i <= clip.referenceIds.length; i++) {
-      if (!clip.technicalPrompt.includes(`<Picture ${i}>`))
-        throw new Error("An assigned image is missing from the prompt.");
-    }
+    // A clip may carry project references its scene does not feature, and
+    // revise is told to preserve the existing selection, so requiring every
+    // assigned image to appear made such clips impossible to revise. The
+    // bounds check above still rejects a <Picture N> with no reference behind it.
   }
   return result;
 }

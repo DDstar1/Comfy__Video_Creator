@@ -105,7 +105,7 @@ export async function POST(request: Request) {
           type: error.name,
           status: error.status,
           code: error.code,
-          requestId: error.request_id,
+          requestId: error.requestID,
         });
       }
       // Do not send provider request bodies, prompts or credentials to logs or clients.

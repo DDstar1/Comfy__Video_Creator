@@ -6,11 +6,11 @@ export type RenderPayload = {
   images: { name: string; image: string }[];
 };
 const MODEL = "minimax_h3_ref2va_pruned_int8_convrot.safetensors";
-const TEXT_ENCODER = "qwen3vl_32b_minimax_h3_int4_convrot.safetensors";
+const TEXT_ENCODER = "qwen3vl_32b_minimax_h3_int8_convrot.safetensors";
 const VIDEO_VAE = "minimax_h3_video_vae_fp16.safetensors";
 const AUDIO_VAE = "minimax_h3_audio_vae_fp32.safetensors";
 const TURBO_LORA =
-  "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16(1).safetensors";
+  "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors";
 
 function dimensions(ratio: Project["ratio"]): [number, number] {
   if (ratio === "9:16") return [352, 608];
@@ -92,8 +92,8 @@ export async function assembleH3Workflow(
   sequence.forEach((clip, index) => {
     const id = String(100 + index);
     workflow[id] = {
-      class_type: "String",
-      inputs: { String: clip.technicalPrompt!.trim() },
+      class_type: "PrimitiveStringMultiline",
+      inputs: { value: clip.technicalPrompt!.trim() },
     };
     promptInputs[`prompt_${index + 1}`] = [id, 0];
   });
@@ -163,6 +163,8 @@ export async function assembleH3Workflow(
       crf: 17,
       preset: "fast",
       audio_bitrate: "192k",
+      // Required BOOLEAN on the node; API format does not apply widget defaults.
+      autoplay: true,
     },
   };
   return { workflow, images };

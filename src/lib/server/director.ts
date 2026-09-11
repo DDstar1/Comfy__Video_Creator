@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
 import type { ResponseInput } from "openai/resources/responses/responses";
 import {
@@ -32,6 +33,60 @@ Earlier clips and their endState provide continuity. Never revise validated clip
 Write technicalPrompt in English using the skill's exact ordered section names with colons
 at the start of lines. Preserve dialogue language. No additional dialogue section.
 Do not return workflow node IDs or arbitrary executable code; the application handles node data.`;
+
+// The model may answer once before consulting the skill and again afterwards.
+// response.output_text concatenates every message, which yields "{...}{...}"
+// and fails JSON.parse, so only the final assistant message is authoritative.
+function finalMessageText(output: readonly unknown[]): string {
+  for (let i = output.length - 1; i >= 0; i--) {
+    const item = output[i] as { type?: string; content?: unknown };
+    if (item?.type !== "message" || !Array.isArray(item.content)) continue;
+    return (item.content as { type?: string; text?: string }[])
+      .filter((part) => part?.type === "output_text")
+      .map((part) => part.text ?? "")
+      .join("");
+  }
+  return "";
+}
+
+// Separates the three failure classes that all surface as one generic retry
+// message: unparseable JSON, schema mismatch, and H3 semantic rejection.
+// Records issue paths and codes only; never output text, story data or images.
+function describeParseFailure(
+  error: unknown,
+  response: { id: string; output: readonly unknown[] },
+  raw: string,
+) {
+  const refusal = response.output.some((item) => {
+    const content = (item as { content?: unknown })?.content;
+    return (
+      Array.isArray(content) &&
+      content.some((part) => (part as { type?: string })?.type === "refusal")
+    );
+  });
+  const detail: Record<string, unknown> = {
+    responseId: response.id,
+    outputTextLength: raw.length,
+    startsWithBrace: raw.trimStart().startsWith("{"),
+    messageCount: response.output.filter(
+      (item) => (item as { type?: string })?.type === "message",
+    ).length,
+    refusal,
+  };
+  if (error instanceof z.ZodError) {
+    detail.kind = "schema";
+    detail.issues = error.issues.map((issue) => ({
+      path: issue.path.join("."),
+      code: issue.code,
+    }));
+  } else if (error instanceof SyntaxError) {
+    detail.kind = "json-syntax";
+  } else {
+    detail.kind = "h3-semantic";
+    detail.message = error instanceof Error ? error.message : String(error);
+  }
+  return detail;
+}
 
 export function createDirectorClient() {
   if (!process.env.CHATGPT_KEY)
@@ -112,7 +167,18 @@ export async function runDirector(input: DirectorInput, signal?: AbortSignal) {
     throw new Error(
       "The model did not consult the attached skill. Please retry.",
     );
-  const output = parseDirectorOutput(response.output_text, input);
+  const raw = finalMessageText(response.output);
+  let output;
+  try {
+    output = parseDirectorOutput(raw, input);
+  } catch (error) {
+    if (process.env.NODE_ENV === "development")
+      console.error(
+        "Director parse failure",
+        describeParseFailure(error, response, raw),
+      );
+    throw error;
+  }
   return {
     ...output,
     responseId: response.id,

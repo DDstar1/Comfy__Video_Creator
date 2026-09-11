@@ -31,7 +31,7 @@ const ALLOWED_NODES = new Set([
   "CLIPLoader",
   "VAELoader",
   "LoraLoaderModelOnly",
-  "String",
+  "PrimitiveStringMultiline",
   "LoadImage",
   "MiniMaxH3PromptPackBridge",
   "MiniMaxH3ReferencePackBridge",
