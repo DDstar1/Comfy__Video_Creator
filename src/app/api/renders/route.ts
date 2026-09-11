@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { authenticatedClient } from "@/lib/server/render-auth";
+import { hasUnlimitedGeneration } from "@/lib/server/billing-access";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -161,7 +162,7 @@ export async function POST(request: Request) {
         { status: 409 },
       );
 
-    const reservation = await client.rpc("comfyTR_reserve_render", {
+    const reservation = hasUnlimitedGeneration(user) ? { error: null } : await client.rpc("comfyTR_reserve_render", {
       job_uuid: job.id,
       reserve_amount: RENDER_RESERVE_CENTS,
     });

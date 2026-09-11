@@ -113,7 +113,7 @@ function Workspace({
   const [renders, setRenders] = useState<
     Record<string, { jobId?: string; status: string; error?: string }>
   >({});
-  const [wallet, setWallet] = useState({ balance_cents: 0, reserved_cents: 0 });
+  const [wallet, setWallet] = useState({ balance_cents: 0, reserved_cents: 0, unlimited: false });
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState("");
   const aiController = useRef<AbortController | null>(null);
@@ -760,7 +760,7 @@ function Workspace({
             </span>
             {user && (
               <button className="wallet-pill" onClick={() => setDialog("wallet")} aria-label="Open wallet">
-                <CreditCard size={15} /> ${(wallet.balance_cents / 100).toFixed(2)}
+                <CreditCard size={15} /> {wallet.unlimited ? "Unlimited" : `$${(wallet.balance_cents / 100).toFixed(2)}`}
               </button>
             )}
             <button
@@ -1679,7 +1679,7 @@ function Workspace({
       )}
       {dialog === "wallet" && user && (
         <WalletDialog
-          balanceCents={wallet.balance_cents}
+          unlimited={wallet.unlimited} balanceCents={wallet.balance_cents}
           reservedCents={wallet.reserved_cents}
           onClose={() => setDialog(null)}
           onRefresh={refreshWallet}
@@ -1849,8 +1849,8 @@ function Workspace({
   }
 }
 
-function WalletDialog({ balanceCents, reservedCents, onClose, onRefresh }: {
-  balanceCents: number; reservedCents: number; onClose: () => void; onRefresh: () => Promise<void>;
+function WalletDialog({ unlimited, balanceCents, reservedCents, onClose, onRefresh }: {
+  unlimited: boolean; balanceCents: number; reservedCents: number; onClose: () => void; onRefresh: () => Promise<void>;
 }) {
   const [amount, setAmount] = useState("5");
   const [busy, setBusy] = useState(false);
@@ -1869,6 +1869,7 @@ function WalletDialog({ balanceCents, reservedCents, onClose, onRefresh }: {
       window.location.assign(result.checkoutUrl);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Checkout could not be opened."); setBusy(false); }
   }
+  if (unlimited) return <Modal title="Your generation wallet" eyebrow="OWNER ACCESS" onClose={onClose}><p>Your account has unlimited generation credit. No wallet top-up is required.</p></Modal>;
   return <Modal title="Your generation wallet" eyebrow="WALLET" onClose={onClose}>
     <div className="wallet-balance"><span>Available credit</span><strong>${(balanceCents / 100).toFixed(2)}</strong>
       {reservedCents > 0 && <small>${(reservedCents / 100).toFixed(2)} reserved for active renders</small>}
