@@ -126,24 +126,42 @@ export async function saveAccountProject(
   references: ReferenceImage[],
 ) {
   if (project.sample) return;
-  const projectResult = await client.from(PROJECT_TABLE).upsert({
-    id: project.id,
-    owner_id: ownerId,
+  const existingProject = await client
+    .from(PROJECT_TABLE)
+    .select("id")
+    .eq("id", project.id)
+    .maybeSingle();
+  if (existingProject.error) throw existingProject.error;
+  const projectValues = {
     title: project.title,
     story: project.story,
     ratio: project.ratio,
     style: project.style,
     image_url: project.image,
     updated_at: project.updatedAt,
-  });
+  };
+  const projectResult = existingProject.data
+    ? await client.from(PROJECT_TABLE).update(projectValues).eq("id", project.id)
+    : await client.from(PROJECT_TABLE).insert({
+        id: project.id,
+        owner_id: ownerId,
+        ...projectValues,
+      });
   if (projectResult.error) throw projectResult.error;
 
+  const existingClips = await client
+    .from(CLIP_TABLE)
+    .select("id")
+    .eq("project_id", project.id);
+  if (existingClips.error) throw existingClips.error;
+  const existingClipIds = new Set(
+    (existingClips.data ?? []).map((row) => String(row.id)),
+  );
+
   if (project.clips.length) {
-    const clipsResult = await client.from(CLIP_TABLE).upsert(
-      project.clips.map((clip, position) => ({
-        id: clip.id,
-        project_id: project.id,
-        owner_id: ownerId,
+    const clipValues = project.clips.map((clip, position) => ({
+      clip,
+      values: {
         position,
         title: clip.title,
         description: clip.description,
@@ -160,16 +178,31 @@ export async function saveAccountProject(
         continuity_stale: clip.continuityStale ?? false,
         revision: clip.revision ?? 0,
         response_id: clip.responseId ?? null,
-      })),
-    );
-    if (clipsResult.error) throw clipsResult.error;
+      },
+    }));
+    const newClips = clipValues
+      .filter(({ clip }) => !existingClipIds.has(clip.id))
+      .map(({ clip, values }) => ({
+        id: clip.id,
+        project_id: project.id,
+        owner_id: ownerId,
+        ...values,
+      }));
+    if (newClips.length) {
+      const inserted = await client.from(CLIP_TABLE).insert(newClips);
+      if (inserted.error) throw inserted.error;
+    }
+    for (const { clip, values } of clipValues) {
+      if (!existingClipIds.has(clip.id)) continue;
+      const updated = await client
+        .from(CLIP_TABLE)
+        .update(values)
+        .eq("id", clip.id)
+        .eq("project_id", project.id);
+      if (updated.error) throw updated.error;
+    }
   }
 
-  const existingClips = await client
-    .from(CLIP_TABLE)
-    .select("id")
-    .eq("project_id", project.id);
-  if (existingClips.error) throw existingClips.error;
   const retained = new Set(project.clips.map((clip) => clip.id));
   const removed = (existingClips.data ?? [])
     .map((row) => row.id)
