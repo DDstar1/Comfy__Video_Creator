@@ -50,6 +50,7 @@ import { loadAccountProjects, saveAccountProject } from "@/lib/project-store";
 import {
   applyCompiledClip,
   canChangeProjectSettings,
+  chainIndexes,
   createSampleProject,
   newClip,
   sampleReferences,
@@ -1246,62 +1247,87 @@ function Workspace({
                             </span>
                           </div>
                           <div className="clip-track">
-                            {project.clips.map((c, index) => (
-                              <button
-                              key={c.id}
-                              className={`clip-card ${clip?.id === c.id ? "selected" : ""} ${isRendering(c.id) ? "generating" : ""}`}
-                              aria-busy={isRendering(c.id)}
-                              onClick={() => setClipId(c.id)}
-                              aria-pressed={clip?.id === c.id}
-                            >
-                              <div className="clip-thumb">
-                                <Photo
-                                  src={c.image}
-                                  alt={`${c.title} reference still`}
-                                />
-                                <span className="clip-number">
-                                  {String(index + 1).padStart(2, "0")}
-                                </span>
-                                <span className="duration">{c.duration}s</span>
-                              </div>
-                              <div className="clip-card-content">
-                                <div className="clip-card-title">
-                                  <strong>{c.title}</strong>
-                                  {c.status === "validated" ? (
-                                    <LockKeyhole size={14} />
-                                  ) : (
-                                    <ChevronRight size={15} />
-                                  )}
-                                </div>
-                                <p>
-                                  {(
-                                    c.pendingDescription ?? c.description
-                                  ).replace(/@/g, "") ||
-                                    "A new moment, waiting to be written."}
-                                </p>
-                                <div className="clip-card-bottom">
-                                  <span
-                                    className={`status ${c.status === "validated" ? "approved" : ""}`}
-                                  >
-                                    {c.status === "validated" ? (
-                                      <Check size={12} />
-                                    ) : (
-                                      <span className="tiny-dot" />
-                                    )}
-                                    {c.status === "validated"
-                                      ? "Validated"
-                                      : c.pendingDescription ||
-                                          c.requestedChange
-                                        ? "Revision pending"
-                                        : "Draft"}
-                                  </span>
-                                  <span>
-                                    {c.referenceIds.length} references
-                                  </span>
-                                </div>
-                              </div>
-                            </button>
-                            ))}
+                            {(() => {
+                              // Clips sharing a chain (one continuing the next)
+                              // render inside one shared, darker group so the
+                              // story's cuts are visible in the sequence itself,
+                              // not just inside an opened clip.
+                              const chains = chainIndexes(project.clips);
+                              const groups: { chain: number; clips: Clip[] }[] = [];
+                              project.clips.forEach((c, i) => {
+                                const last = groups[groups.length - 1];
+                                if (last && last.chain === chains[i]) last.clips.push(c);
+                                else groups.push({ chain: chains[i], clips: [c] });
+                              });
+                              let position = 0;
+                              return groups.map((group) => {
+                                const startIndex = position;
+                                position += group.clips.length;
+                                return (
+                                  <div key={group.chain} className="chain-group">
+                                    {group.clips.map((c, offset) => {
+                                      const index = startIndex + offset;
+                                      return (
+                                        <button
+                                          key={c.id}
+                                          className={`clip-card ${clip?.id === c.id ? "selected" : ""} ${isRendering(c.id) ? "generating" : ""}`}
+                                          aria-busy={isRendering(c.id)}
+                                          onClick={() => setClipId(c.id)}
+                                          aria-pressed={clip?.id === c.id}
+                                        >
+                                          <div className="clip-thumb">
+                                            <Photo
+                                              src={c.image}
+                                              alt={`${c.title} reference still`}
+                                            />
+                                            <span className="clip-number">
+                                              {String(index + 1).padStart(2, "0")}
+                                            </span>
+                                            <span className="duration">{c.duration}s</span>
+                                          </div>
+                                          <div className="clip-card-content">
+                                            <div className="clip-card-title">
+                                              <strong>{c.title}</strong>
+                                              {c.status === "validated" ? (
+                                                <LockKeyhole size={14} />
+                                              ) : (
+                                                <ChevronRight size={15} />
+                                              )}
+                                            </div>
+                                            <p>
+                                              {(
+                                                c.pendingDescription ?? c.description
+                                              ).replace(/@/g, "") ||
+                                                "A new moment, waiting to be written."}
+                                            </p>
+                                            <div className="clip-card-bottom">
+                                              <span
+                                                className={`status ${c.status === "validated" ? "approved" : ""}`}
+                                              >
+                                                {c.status === "validated" ? (
+                                                  <Check size={12} />
+                                                ) : (
+                                                  <span className="tiny-dot" />
+                                                )}
+                                                {c.status === "validated"
+                                                  ? "Validated"
+                                                  : c.pendingDescription ||
+                                                      c.requestedChange
+                                                    ? "Revision pending"
+                                                    : "Draft"}
+                                              </span>
+                                              <span>
+                                                {c.referenceIds.length} references
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              });
+                            })()}
                           </div>
                           <div className="continuity-note">
                             <AudioLines size={18} />

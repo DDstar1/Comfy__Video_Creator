@@ -685,6 +685,22 @@ img {
 .clip-track {
   display: contents;
 }
+/* Clips sharing a chain (one continuing the next) sit inside one shared,
+   darker container, so a cut is visible as a gap between containers without
+   opening a clip to check. A single-clip chain gets the same treatment for
+   consistency, even though there is nothing to visually join inside it. */
+.chain-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #e6ebda;
+  border-radius: 12px;
+  padding: 8px;
+  margin-bottom: 10px;
+}
+.chain-group .clip-card {
+  margin-bottom: 0;
+}
 .sequence-header {
   display: flex;
   justify-content: space-between;
@@ -2629,7 +2645,7 @@ hr {
   }
   .clip-track {
     display: flex;
-    gap: 10px;
+    gap: 14px;
     overflow-x: auto;
     scroll-snap-type: x proximity;
     overscroll-behavior-x: contain;
@@ -2639,7 +2655,13 @@ hr {
     padding: 2px 2px 10px;
     margin-bottom: 10px;
   }
-  .clip-track > .clip-card {
+  .chain-group {
+    flex-direction: row;
+    flex: 0 0 auto;
+    gap: 8px;
+    margin-bottom: 0;
+  }
+  .clip-track .clip-card {
     flex: 0 0 clamp(228px, 62vw, 292px);
     scroll-snap-align: start;
     margin: 0;
@@ -3145,7 +3167,7 @@ hr {
     font-size: 11px;
     padding: 8px;
   }
-  .clip-track > .clip-card {
+  .clip-track .clip-card {
     flex-basis: clamp(200px, 76vw, 248px);
   }
   .clip-card {
