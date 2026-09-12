@@ -839,6 +839,70 @@ img {
   gap: 8px;
   flex-shrink: 0;
 }
+/* A clip being generated on RunPod. The card breathes and a bar sweeps its top
+   edge, so an in-flight render is visible from the sequence without opening the
+   clip. Renders take minutes, so this runs for a long time: keep it slow and
+   low-contrast rather than attention-grabbing. */
+@keyframes clip-breathe {
+  0%,
+  100% {
+    border-color: #cdd8bd;
+    box-shadow: 0 0 0 0 rgba(122, 143, 92, 0);
+  }
+  50% {
+    border-color: #a9bd8f;
+    box-shadow: 0 0 0 3px rgba(122, 143, 92, 0.13);
+  }
+}
+@keyframes clip-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+.clip-card.generating {
+  animation: clip-breathe 2.4s ease-in-out infinite;
+  position: relative;
+  overflow: hidden;
+}
+.clip-card.generating:after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #7a8f5c, transparent);
+  animation: clip-sweep 1.7s linear infinite;
+}
+.button.primary.working {
+  animation: clip-breathe 2.4s ease-in-out infinite;
+  position: relative;
+  overflow: hidden;
+}
+.button.primary.working:after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.22),
+    transparent
+  );
+  animation: clip-sweep 1.7s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .clip-card.generating,
+  .clip-card.generating:after,
+  .button.primary.working,
+  .button.primary.working:after {
+    animation: none;
+  }
+  .clip-card.generating {
+    border-color: #a9bd8f;
+  }
+}
 .clip-continuity {
   display: flex;
   align-items: center;

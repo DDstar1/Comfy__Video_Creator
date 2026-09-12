@@ -40,7 +40,12 @@ import {
   X,
 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
-import { supabase, REFERENCE_BUCKET, REFERENCE_TABLE } from "@/lib/supabase";
+import {
+  supabase,
+  REFERENCE_BUCKET,
+  REFERENCE_TABLE,
+  RENDER_JOB_TABLE,
+} from "@/lib/supabase";
 import { loadAccountProjects, saveAccountProject } from "@/lib/project-store";
 import {
   applyCompiledClip,
@@ -348,6 +353,8 @@ function Workspace({
   function saveProject(next: Project) {
     setProjects((prev) => prev.map((p) => (p.id === next.id ? next : p)));
   }
+  const isRendering = (clipId: string) =>
+    ["preparing", "queued", "running"].includes(renders[clipId]?.status ?? "");
   function modifyProject(patch: Partial<Project>) {
     if (project)
       saveProject({
@@ -356,6 +363,111 @@ function Workspace({
         updatedAt: new Date().toISOString(),
       });
   }
+  // Polling is what ingests a finished render: the status route copies the video
+  // out of RunPod into permanent storage. Keeping it in a named function means a
+  // render can be picked back up after a reload instead of being stranded, and
+  // the session is re-read each pass so a token refresh mid-render cannot 401.
+  const followRender = useCallback(
+    async (jobId: string, clipId: string, projectId: string) => {
+      const client = supabase;
+      if (!client) return;
+      try {
+        for (;;) {
+          const { data } = await client.auth.getSession();
+          if (!data.session) throw new Error("Sign in to generate clips.");
+          const statusResponse = await fetch(
+            `/api/renders?jobId=${encodeURIComponent(jobId)}`,
+            {
+              headers: { Authorization: `Bearer ${data.session.access_token}` },
+              cache: "no-store",
+            },
+          );
+          const result = await statusResponse.json();
+          if (!statusResponse.ok)
+            throw new Error(result.error ?? "Render status could not be read.");
+          if (result.status === "failed" || result.status === "cancelled")
+            throw new Error(result.error_message ?? "The render failed.");
+          if (result.status === "completed") {
+            setProjects((current) =>
+              current.map((item) =>
+                item.id !== projectId
+                  ? item
+                  : {
+                      ...item,
+                      updatedAt: new Date().toISOString(),
+                      clips: item.clips.map((candidate) =>
+                        candidate.id === clipId
+                          ? {
+                              ...candidate,
+                              status: "ready" as const,
+                              videoUrl: result.videoUrl,
+                              videoStoragePath: result.videoStoragePath,
+                            }
+                          : candidate,
+                      ),
+                    },
+              ),
+            );
+            setRenders((current) => ({
+              ...current,
+              [clipId]: { jobId, status: "completed" },
+            }));
+            notify("Your clip is ready to preview and validate.");
+            void refreshWallet();
+            return;
+          }
+          setRenders((current) => ({
+            ...current,
+            [clipId]: { jobId, status: result.status },
+          }));
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+        }
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "The render failed.";
+        setRenders((current) => ({
+          ...current,
+          [clipId]: { ...current[clipId], jobId, status: "failed", error: message },
+        }));
+        notify(message);
+      }
+    },
+    [refreshWallet, notify],
+  );
+
+  // A render survives the page that started it. RunPod keeps a finished result
+  // for roughly half an hour, so re-attaching on load recovers a clip whose tab
+  // was reloaded or closed; without this the GPU time is paid for and the video
+  // is never ingested.
+  useEffect(() => {
+    if (!ready || !userId || !supabase) return;
+    const client = supabase;
+    let active = true;
+    void (async () => {
+      const { data, error } = await client
+        .from(RENDER_JOB_TABLE)
+        .select("id,clip_id,project_id,status")
+        .eq("owner_id", userId)
+        .in("status", ["submitting", "queued", "running"]);
+      if (error || !active || !data?.length) return;
+      for (const job of data) {
+        const clipId = String(job.clip_id);
+        let alreadyFollowed = false;
+        setRenders((current) => {
+          alreadyFollowed = Boolean(current[clipId]);
+          return alreadyFollowed
+            ? current
+            : { ...current, [clipId]: { jobId: String(job.id), status: String(job.status) } };
+        });
+        if (alreadyFollowed) continue;
+        void followRender(String(job.id), clipId, String(job.project_id));
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [ready, userId, followRender]);
+
   async function generateClip(target: Clip) {
     if (!project || !user || !supabase) {
       if (!user) setDialog("auth");
@@ -392,51 +504,7 @@ function Workspace({
         ...current,
         [target.id]: { jobId: submitted.jobId, status: "queued" },
       }));
-      for (;;) {
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-        const statusResponse = await fetch(
-          `/api/renders?jobId=${encodeURIComponent(submitted.jobId)}`,
-          { headers, cache: "no-store" },
-        );
-        const result = await statusResponse.json();
-        if (!statusResponse.ok)
-          throw new Error(result.error ?? "Render status could not be read.");
-        if (result.status === "failed" || result.status === "cancelled")
-          throw new Error(result.error_message ?? "The render failed.");
-        if (result.status === "completed") {
-          setProjects((current) =>
-            current.map((item) =>
-              item.id !== project.id
-                ? item
-                : {
-                    ...item,
-                    updatedAt: new Date().toISOString(),
-                    clips: item.clips.map((candidate) =>
-                      candidate.id === target.id
-                        ? {
-                            ...candidate,
-                            status: "ready" as const,
-                            videoUrl: result.videoUrl,
-                            videoStoragePath: result.videoStoragePath,
-                          }
-                        : candidate,
-                    ),
-                  },
-            ),
-          );
-          setRenders((current) => ({
-            ...current,
-            [target.id]: { jobId: submitted.jobId, status: "completed" },
-          }));
-          notify("Your clip is ready to preview and validate.");
-          void refreshWallet();
-          return;
-        }
-        setRenders((current) => ({
-          ...current,
-          [target.id]: { jobId: submitted.jobId, status: result.status },
-        }));
-      }
+      await followRender(submitted.jobId, target.id, project.id);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "The render failed.";
@@ -1181,7 +1249,8 @@ function Workspace({
                             {project.clips.map((c, index) => (
                               <button
                               key={c.id}
-                              className={`clip-card ${clip?.id === c.id ? "selected" : ""}`}
+                              className={`clip-card ${clip?.id === c.id ? "selected" : ""} ${isRendering(c.id) ? "generating" : ""}`}
+                              aria-busy={isRendering(c.id)}
                               onClick={() => setClipId(c.id)}
                               aria-pressed={clip?.id === c.id}
                             >
@@ -2316,7 +2385,7 @@ function ClipEditor({
           </button>
         ) : (
           <button
-            className="button primary"
+            className={`button primary ${rendering ? "working" : ""}`}
             disabled={
               rendering ||
               project.sample ||
