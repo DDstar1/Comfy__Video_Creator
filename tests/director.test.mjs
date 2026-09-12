@@ -19,6 +19,7 @@ const generated = {
   technicalPrompt:
     "integrated_multimodal_description: [Shot 1] A letter.\noverall_soundscape: Wind.\nnon_diegetic_music: N/A",
   endState: "The letter is still on the table.",
+  continuesPrevious: false,
 };
 const project = newProject("Letter", "A letter at dawn");
 const input = directorInputSchema.parse({

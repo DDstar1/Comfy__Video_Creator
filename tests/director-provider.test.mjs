@@ -21,6 +21,7 @@ test("provider request uses the requested model, server key and pinned hosted sk
     technicalPrompt:
       "integrated_multimodal_description: A letter.\noverall_soundscape: Wind.\nnon_diegetic_music: N/A",
     endState: "A letter on the table.",
+    continuesPrevious: false,
   };
   const input = {
     action: "plan",

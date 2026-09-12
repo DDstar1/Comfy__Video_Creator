@@ -20,7 +20,17 @@ Only read the bundled skill guides with the shell. Do not access the network.
 Return ONLY a JSON object {"clips":[...]} without Markdown fences or commentary.
 Each clip has exactly: title (short), description (human-readable, @Name mentions),
 duration (5,10,15 seconds), referenceIds (ordered selected IDs), mode (T2VA or Ref2VA),
-technicalPrompt (complete official H3 prompt string), endState (physical, camera and audio state).
+technicalPrompt (complete official H3 prompt string), endState (physical, camera and audio state),
+continuesPrevious (boolean).
+continuesPrevious decides whether the sequence continues the previous clip or cuts to this one.
+Set it TRUE only when this clip is the same continuous camera take as the previous clip:
+same place, same subjects, action carrying straight on from the previous endState.
+Set it FALSE whenever the story cuts - a different location, a different set of characters,
+a jump in time. The first clip of a project is always FALSE.
+This matters because a continuing clip is generated from the previous clip's final frames,
+so marking a genuine scene change as continuing makes the previous subject visibly morph
+into the new one instead of cutting. When unsure, prefer FALSE; a wrong cut is cheap and a
+wrong morph wastes a render.
 For plan, create 1–12 sequential clips. For revise, return exactly the requested clip,
 preserve its duration and reference selection unless an explicit requested change requires otherwise.
 Apply pendingDescription and requestedChange together. Keep readable and technical versions aligned.

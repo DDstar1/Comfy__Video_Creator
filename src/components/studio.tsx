@@ -28,7 +28,9 @@ import {
   LockKeyhole,
   LogOut,
   Menu,
+  Link2,
   Plus,
+  Scissors,
   Trash2,
   Search,
   Settings2,
@@ -1974,6 +1976,8 @@ function ClipEditor({
     !!renderState &&
     ["preparing", "queued", "running"].includes(renderState.status);
   const index = project.clips.findIndex((c) => c.id === clip.id);
+  // The first clip always starts a chain; there is nothing before it to continue.
+  const continues = index > 0 && clip.continuesPrevious !== false;
   const usedRefs = references.filter((r) => clip.referenceIds.includes(r.id));
   const priorReady = project.clips
     .slice(0, index)
@@ -1997,6 +2001,25 @@ function ClipEditor({
           <h3>{clip.title}</h3>
         </div>
         <div className="editor-heading-actions">
+          {index > 0 && (
+            <button
+              className={`clip-continuity ${continues ? "joined" : "cut"}`}
+              onClick={() =>
+                locked
+                  ? onNotice("Validated clips keep the timing they were approved with.")
+                  : onChange({ continuesPrevious: !continues })
+              }
+              aria-pressed={continues}
+              title={
+                continues
+                  ? "Continues the previous clip as one take. Click to cut instead."
+                  : "Cuts to this clip. Click to continue the previous one instead."
+              }
+            >
+              {continues ? <Link2 size={13} /> : <Scissors size={13} />}
+              {continues ? "Continues" : "Cuts here"}
+            </button>
+          )}
           <span className={`badge ${locked ? "green" : "ochre"}`}>
             {locked ? <LockKeyhole size={12} /> : <span className="tiny-dot" />}
             {locked

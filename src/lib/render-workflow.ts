@@ -1,4 +1,5 @@
 import type { Clip, Project, ReferenceImage } from "./studio-model.ts";
+import { chainMembers } from "./studio-model.ts";
 
 type ApiNode = { class_type: string; inputs: Record<string, unknown> };
 export type RenderPayload = {
@@ -52,7 +53,11 @@ export async function assembleH3Workflow(
   const targetIndex = project.clips.findIndex((clip) => clip.id === target.id);
   if (targetIndex < 0)
     throw new Error("The selected clip is not in this project.");
-  const sequence = project.clips.slice(0, targetIndex + 1);
+  // Only this clip's own chain is sent. Including an earlier chain would hand
+  // the model the previous scene's final frames as motion context, which is
+  // what makes one scene morph into the next instead of cutting to it.
+  const { start: chainStart } = chainMembers(project.clips, targetIndex);
+  const sequence = project.clips.slice(chainStart, targetIndex + 1);
   if (sequence.some((clip) => !clip.technicalPrompt?.trim()))
     throw new Error(
       "Compile every clip through the current clip before rendering.",
@@ -142,7 +147,9 @@ export async function assembleH3Workflow(
           seed: seed(clip.id),
           seed_mode: "fixed",
           duration: clip.duration,
-          validated: index < targetIndex,
+          // The target is the last entry of the chain-scoped sequence, so this
+          // must compare against the sequence, not the project-wide index.
+          validated: index < sequence.length - 1,
           color_adjustment: { saturation: 100, contrast: 100, brightness: 100 },
         })),
       }),

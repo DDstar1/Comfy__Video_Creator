@@ -65,6 +65,9 @@ export async function loadAccountProjects(
       referenceIds: (row.reference_ids as string[]) ?? [],
       status: row.status as Clip["status"],
       image: String(row.image_url ?? ""),
+      // Rows written before chains existed have no value; those clips continue
+      // the previous one, which is how the project already behaved.
+      continuesPrevious: row.continues_previous !== false,
       ...(videoStoragePath ? { videoStoragePath } : {}),
       ...(signedVideo?.data?.signedUrl
         ? { videoUrl: signedVideo.data.signedUrl }
@@ -175,6 +178,7 @@ export async function saveAccountProject(
         technical_prompt: clip.technicalPrompt ?? null,
         mode: clip.mode ?? null,
         end_state: clip.endState ?? null,
+        continues_previous: clip.continuesPrevious !== false,
         continuity_stale: clip.continuityStale ?? false,
         revision: clip.revision ?? 0,
         response_id: clip.responseId ?? null,

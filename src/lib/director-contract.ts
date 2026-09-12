@@ -11,6 +11,8 @@ export const generatedClipSchema = z
     mode: z.enum(["T2VA", "Ref2VA"]),
     technicalPrompt: text,
     endState: text.max(4000),
+    // False cuts to this clip instead of continuing the previous one.
+    continuesPrevious: z.boolean(),
   })
   .strict();
 export type GeneratedClip = z.infer<typeof generatedClipSchema>;
@@ -24,6 +26,7 @@ const inputClip = z.object({
   duration: z.union([z.literal(5), z.literal(10), z.literal(15)]),
   referenceIds: z.array(id).max(9),
   status: z.enum(["draft", "ready", "validated"]),
+  continuesPrevious: z.boolean().optional(),
   technicalPrompt: z.string().max(30000).optional(),
   endState: z.string().max(4000).optional(),
   pendingDescription: z.string().max(6000).optional(),

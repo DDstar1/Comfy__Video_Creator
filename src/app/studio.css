@@ -839,6 +839,28 @@ img {
   gap: 8px;
   flex-shrink: 0;
 }
+.clip-continuity {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid #e3e7dd;
+  background: #fff;
+  font-size: 10px;
+  letter-spacing: 0.4px;
+  color: #6f7d5e;
+  white-space: nowrap;
+}
+.clip-continuity.cut {
+  border-color: #ded2bb;
+  background: #fbf7ee;
+  color: #8a7038;
+}
+.clip-continuity:hover {
+  border-color: #cbd6bb;
+}
 .clip-remove {
   display: flex;
   align-items: center;

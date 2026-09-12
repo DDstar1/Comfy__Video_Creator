@@ -142,6 +142,27 @@ export async function POST(request: Request) {
         { status: 409 },
       );
 
+    // Which chain this clip belongs to decides its cache directory, so it is
+    // derived here from stored order rather than trusted from the browser. A
+    // clip that does not continue the previous one starts a new chain, and the
+    // first clip always starts one.
+    const { data: ordered, error: orderError } = await client
+      .from(CLIPS)
+      .select("id,continues_previous")
+      .eq("project_id", input.projectId)
+      .eq("owner_id", user.id)
+      .order("position");
+    if (orderError || !ordered?.length)
+      return Response.json(
+        { error: "This project's clips could not be read." },
+        { status: 409 },
+      );
+    let chainIndex = -1;
+    for (const [position, row] of ordered.entries()) {
+      if (position === 0 || row.continues_previous === false) chainIndex += 1;
+      if (row.id === input.clipId) break;
+    }
+
     const { data: job, error: jobError } = await client
       .from(JOBS)
       .insert({
@@ -185,7 +206,7 @@ export async function POST(request: Request) {
             input: {
               workflow: input.workflow,
               images: input.images ?? [],
-              cache_namespace: `${user.id}:${input.projectId}`,
+              cache_namespace: `${user.id}:${input.projectId}:${chainIndex}`,
             },
           }),
         },

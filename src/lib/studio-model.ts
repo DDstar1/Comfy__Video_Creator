@@ -23,6 +23,11 @@ export type Clip = {
   technicalPrompt?: string;
   mode?: "T2VA" | "Ref2VA";
   endState?: string;
+  // False starts a new chain: the clip is generated with no motion context, so
+  // the sequence cuts to it instead of morphing into it. The first clip always
+  // starts one. Absent means "continues", which is how every project behaved
+  // before chains existed.
+  continuesPrevious?: boolean;
   continuityStale?: boolean;
   revision?: number;
   responseId?: string;
@@ -171,9 +176,35 @@ export function updateClip(
     ),
   };
 }
+/** Chain number for each clip. A clip that does not continue the previous one
+ *  starts a new chain, and each chain renders with its own motion-context cache. */
+export function chainIndexes(clips: Clip[]): number[] {
+  let chain = -1;
+  return clips.map((clip, index) => {
+    if (index === 0 || clip.continuesPrevious === false) chain += 1;
+    return chain;
+  });
+}
+
+/** The clips sharing a chain with `index`, and where that chain starts. */
+export function chainMembers(clips: Clip[], index: number) {
+  const chains = chainIndexes(clips);
+  const chain = chains[index];
+  const start = chains.indexOf(chain);
+  return {
+    chain,
+    start,
+    members: clips.filter((_, position) => chains[position] === chain),
+  };
+}
+
 export function validateClip(project: Project, id: string): Project {
   const index = project.clips.findIndex((c) => c.id === id);
   const clip = project.clips[index];
+  // Only the clips before this one *in the same chain* have to be approved.
+  // Earlier chains are separate takes joined by a cut, so they neither feed
+  // this clip's motion context nor block it.
+  const { start } = chainMembers(project.clips, index);
   if (
     !clip ||
     clip.status !== "ready" ||
@@ -181,7 +212,7 @@ export function validateClip(project: Project, id: string): Project {
     clip.pendingDescription ||
     clip.requestedChange ||
     clip.continuityStale ||
-    project.clips.slice(0, index).some((c) => c.status !== "validated")
+    project.clips.slice(start, index).some((c) => c.status !== "validated")
   )
     return project;
   return {
