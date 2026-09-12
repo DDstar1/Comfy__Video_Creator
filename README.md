@@ -7,6 +7,44 @@ for the interface design.
 
 ## Status
 
+### Latest local changes — 2026-09-12
+
+Historical push statements below do not include a verified deployment of these
+latest working-tree changes.
+
+- Direct project routes: `/studio/projects/[projectId]?tab=story|references|clips`;
+  `/studio/library` for account references. Legacy hash bookmarks migrate.
+  `loadProjectSummaries` loads sidebar metadata; `loadAccountProject` scopes full
+  clip/reference/history reads to the selected project.
+- Quality/ratio settings and suggested-reference linking are implemented and
+  persisted. Unresolved suggested references block render submission.
+- Clip cards display a spinner with **Generating** while preparing, queued, or
+  running. Green wrappers apply only to connected sequences. Desktop internal
+  gaps are 4px; mobile retains 8px touch spacing.
+- Validation awaits persistence before success. Continuation prerequisites are
+  checked within the current chain. Accepted-job acknowledgement retries never
+  submit a second GPU job; GET status reads retry transient failures.
+- **Merge videos** is available when every clip is validated and has a stored
+  video. `POST /api/projects/merge` accepts `{ projectId }`; authenticated
+  `GET /api/projects/merge?projectId=...` restores an existing export. The server
+  selects only the final cumulative video of each chain and joins them with
+  `ffmpeg-static` on CPU. No RunPod generation is submitted for this merge.
+- Exports are private MP4s in `comfytr-generated-videos` at
+  `USER_ID/PROJECT_ID/exports/SOURCE_HASH.mp4`, with one-hour signed preview and
+  download URLs. Inputs are limited to 512 MB; the route requests a 300-second
+  execution limit. Production hosting limits and binary packaging need a deployed
+  smoke test.
+
+The local four-clip fixture survived reload with all validations and seven
+references. Its merged video played at 19.783 seconds, 608×352, without a media
+error. The coordinating merge task reported 34 tests, targeted ESLint, and build
+passing; the subsequent grouping change passed targeted ESLint. Ordinary paid
+customer settlement and production deployment were not tested in this run.
+
+Latest live verification: [2026-09-12 E2E retest](docs/e2e/2026-09-12-live-retest.md).
+See that report for real GPU execution/playback evidence and unresolved checks;
+historical build and deployment statements below are not a fresh E2E pass.
+
 Both this repo and `runpod-worker-repo/` are pushed to `origin/main` as of
 `bb21cfc` (frontend) — see the root README's checkpoint sections for the full
 account of what changed and how it was verified. If this deploys to Vercel,
@@ -23,6 +61,102 @@ configured remote Supabase, OpenAI and RunPod services — writes are real and
 inference is billable; no mock render exists.
 
 ## Current state
+
+### Project creation and references
+
+New projects accept a book scene or an original idea, plus quality and
+device/frame size. These settings remain editable on the Story tab until clips
+exist; afterward the UI and database trigger lock them. Every render reads the
+saved settings on the server. Existing projects default to Draft.
+
+| Quality | Landscape / desktop (16:9) | Portrait / phone (9:16) | Square (1:1) |
+| --- | --- | --- | --- |
+| Draft | 608 x 352 | 352 x 608 | 448 x 448 |
+| Standard | 960 x 544 | 544 x 960 | 704 x 704 |
+| High | 1280 x 736 | 736 x 1280 | 960 x 960 |
+
+These are model-aligned dimensions, not exact mathematical aspect ratios.
+Quality changes resolution, not the four-step Turbo sampler. Standard/High GPU
+output has not been verified live.
+
+The director can suggest up to four missing image references per planned clip.
+Each contains a name and description reused for the same subject across clips.
+Linked images have a light green background and **Linked** checkmark; missing
+suggestions use light red and **Image needed**. Labels supplement the colours.
+
+- **Upload image** pre-fills the suggested name/description and adds the image to
+  the account library and project.
+- **Choose from library** links a real image across affected draft clips.
+- **Remove** dismisses the matching suggestion across draft clips. Subjects remain
+  described in words; suggestions never receive a `<Picture N>` binding.
+- Linking marks affected prompts stale and adds a compilation request identifying
+  the subject/image mapping. Recompile before generating. Validated clips remain
+  unchanged; the nine-image project/clip limits still apply.
+- Revisions preserve only remaining suggestions. Both client and render API
+  reject unresolved suggestions before video generation.
+
+`directorResponseSchema` requires the suggestion array for strict structured
+output. The stored-data parser accepts older clips without that field.
+
+### Project links and loading
+
+`/studio` lists projects. Sidebar/cards link to
+`/studio/projects/PROJECT_ID?tab=story|references|clips`; `/studio/library` opens
+the account library. Bookmarks, new tabs, direct reload, and Back/Forward work.
+Legacy `#/project/ID/TAB` links migrate to the new URL.
+
+`loadProjectSummaries` reads only ID, title, cover, ratio, and update time.
+`loadAccountProject(client, ownerId, projectId)` loads the selected project,
+its clips, reference links and those clips' prompt versions, renewing signed
+video URLs. The reference library refreshes on project entry; active-job recovery
+is scoped to that project. Summaries never enter autosave as full projects.
+Pending edits are saved through the save queue before the next detail load.
+Request cleanup ignores late responses after navigation.
+
+Loading, sign-in, unavailable-project and retry states cover direct visits.
+A URL does not grant access: owner filters and database RLS still apply.
+Google sign-in preserves the current studio path; configure Supabase's redirect
+allow list for deployed studio/project paths and localhost.
+
+### Final video export
+
+Once all clips are validated and have permanent video paths, **Merge videos**
+is enabled above the clip sequence. Progress is followed by a preview and
+**Download merged video**. Reopening the project retrieves the stored export.
+Adding clips changes the export signature so an older film is not offered as
+the current result. Errors are shown for retry; source clips remain locked.
+
+The authenticated merge API checks project ownership and validation, orders clips
+by position, and selects the last cumulative video from each chain. Concatenating
+every preview would duplicate continuation footage. FFmpeg stream-copies video
+and audio into MP4 without a new GPU render. Temporary files are cleaned up on
+success or failure. The private export filename hashes the ordered source paths;
+repeat requests reuse it. Preview/download URLs last one hour and renew on reload.
+
+`npm install` or `npm ci` installs `ffmpeg-static`; its installation script must
+run to obtain the platform binary. `next.config.ts` externalizes the package and
+includes it in merge-route tracing. The host needs Node.js child-process support
+and writable temporary storage; this is not an Edge route. Inputs are capped at
+512 MiB, FFmpeg has a 180-second timeout, and the route declares 300 seconds.
+Production memory, bundle and execution limits still require deployment QA.
+Exports use existing storage policies, with no new table or service-role key.
+This is separate from the older RunPod `input.merge` path.
+
+| Implementation | Responsibility |
+| --- | --- |
+| [studio-forms.tsx](src/components/studio-forms.tsx) | Creation settings and pre-filled uploads |
+| [studio-model.ts](src/lib/studio-model.ts) | Shared suggestion resolution |
+| [studio-route.ts](src/lib/studio-route.ts) | URLs and legacy bookmark parsing |
+| [project-store.ts](src/lib/project-store.ts) | Summaries, scoped loading, persistence |
+| [project-merge.tsx](src/components/project-merge.tsx) | Merge progress, preview and download |
+| [merge API](src/app/api/projects/merge/route.ts) | Ownership checks and private exports |
+| [merge-plan.ts](src/lib/merge-plan.ts) | Final source selection per chain |
+| [merge-video.ts](src/lib/server/merge-video.ts) | FFmpeg and temporary-file cleanup |
+
+Migration
+[20260912000004_comfyTR_project_quality_references.sql](../supabase/migrations/20260912000004_comfyTR_project_quality_references.sql)
+was applied to the linked database this session. Deploy it with these frontend
+changes; saves of the new fields fail without it.
 
 Projects, scene input, image-library/account forms and the clip editor are built.
 Luna planning and prompt-editing requests are wired to `POST /api/director` with the
@@ -68,7 +202,7 @@ minutes after completion — the video still exists on the Network Volume as an
 ordinary side effect of the Extender's cache, and the server reads it from
 there directly over signed S3 requests, no RunPod job or GPU charge involved,
 for a single-clip chain. A chain with more than one clip needs its segments
-joined with ffmpeg, which the server does not have, so that case asks a RunPod
+joined through the existing recovery path, so that case asks a RunPod
 worker to do the join instead. A clip being generated pulses in the sequence
 and its Generate button, so an in-flight render is visible without opening it.
 
@@ -189,7 +323,7 @@ The separate worker image accepts a ComfyUI API workflow in `input.workflow` and
 optional base64 reference images in `input.images`. It returns final MP4/MKV files
 in `output.videos`. `src/lib/render-workflow.ts` builds that workflow with the
 deployed model names, ordered image inputs, four-step Turbo LoRA settings and a
-0.2 MP draft canvas — and, since a chain model exists, only the validated prefix
+project-quality canvas (Draft defaults to about 0.2 MP) and only the validated prefix
 plus current clip **within the target clip's own chain**, never an earlier
 scene. Submission, polling and permanent result storage are implemented and
 verified live.
@@ -286,7 +420,7 @@ distributed quotas and long-running job management remain deployment work.
 - Story: TXT/Markdown import up to 2 MiB, mentions, aspect ratio and visual direction.
 - References: account library, previews and public JPEG/PNG/WebP uploads up to 20 MiB.
 - Account: Supabase email/password sign-in, registration and sign-out.
-- Navigation: URL fragments, keyboard tabs, native dialogs and responsive drawer.
+- Navigation: project URLs, legacy fragment migration, keyboard tabs, dialogs and responsive drawer.
 - Clip sequence: a horizontally scrolling track on narrow layouts, a stacked
   sidebar on wide ones. Clips sharing a chain render inside one shared, tinted
   container — a gap between containers is a cut, one container holding several
@@ -313,7 +447,11 @@ npm test
 npm run build
 ```
 
-Last recorded checks (2026-09-12): build, lint and 19 local tests passed. Tests
+Latest recorded checks (2026-09-12): production build, targeted ESLint and 34 local
+tests passed. Added tests cover reference resolution, strict response schema,
+quality dimensions, URL parsing and project-scoped query selection, merge source
+ordering, and a real FFmpeg audio/video concat/decode. A later export-signature
+guard passed TypeScript. Historical earlier checks: 19 local tests passed. Tests
 cover draft/validation guards, revision history, H3 contracts, chain assignment
 and scoping (`tests/chains.test.mjs`), and a mocked provider request. Browser
 checks covered planning, prompt revision, three live renders across two chains,
@@ -347,7 +485,6 @@ local test suite.
 
 See the [Claude Code end-to-end runbook](docs/e2e/README.md) for exact setup,
 fixture, reference paths, browser steps, acceptance checks and debugging entry points.
-Latest checkpoint: local Google sign-in and project loading passed. The connected
-local prompt-revision retry still returned invalid model output after the schema
-change; parser diagnostics are the next step. No render for this project has yet
-been submitted. Preserve the existing four-by-five-second project (20 seconds).
+Latest checkpoint: all four clips in the chain fixture are validated, and its
+19.783-second merged export is saved. Direct-project reload and browser Back were
+verified. Preserve the existing four-by-five-second project (20 seconds).

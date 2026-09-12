@@ -16,7 +16,9 @@ export const VIDEO_ASSET_TABLE = "comfyTR_clip_video_assets";
 
 export async function signInWithGoogle() {
   if (!supabase) throw new Error("Account connection is not configured on this deployment.");
-  const redirectTo = `${window.location.origin}/studio`;
+  const redirectTo = window.location.pathname.startsWith("/studio")
+    ? `${window.location.origin}${window.location.pathname}${window.location.search}`
+    : `${window.location.origin}/studio`;
   const { error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: { redirectTo, queryParams: { prompt: "select_account" } },

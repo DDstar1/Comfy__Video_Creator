@@ -46,14 +46,17 @@ import {
   REFERENCE_TABLE,
   RENDER_JOB_TABLE,
 } from "@/lib/supabase";
-import { loadAccountProjects, saveAccountProject } from "@/lib/project-store";
+import { loadAccountProject, loadProjectSummaries, saveAccountProject, type ProjectSummary } from "@/lib/project-store";
+import { readStudioRoute, studioUrl, type StudioRoute } from "@/lib/studio-route";
 import {
   applyCompiledClip,
   canChangeProjectSettings,
   chainIndexes,
+  chainMembers,
   createSampleProject,
   newClip,
   sampleReferences,
+  resolveSuggestedReference,
   updateClip,
   validateClip,
   type Clip,
@@ -63,15 +66,16 @@ import {
 import { AuthForm, NewProjectForm, UploadForm } from "./studio-forms";
 import { directorOutputSchema } from "@/lib/director-contract";
 import { assembleH3Workflow } from "@/lib/render-workflow";
+import { readRenderStatus } from "@/lib/render-status";
 import { Mentions, Modal, Photo } from "./ui";
+import { ProjectMerge } from "./project-merge";
 
-type View = "projects" | "studio" | "library";
 type Tab = "story" | "references" | "clips";
 type Dialog =
   "new" | "auth" | "upload" | "help" | "settings" | "validate" | "wallet" | null;
-type Route = { view: View; projectId?: string; tab?: Tab };
+type Route = StudioRoute;
 
-export default function Studio() {
+export default function Studio({ initialRoute = { view: "projects" } }: { initialRoute?: Route }) {
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
   useEffect(() => {
@@ -98,16 +102,18 @@ export default function Studio() {
     };
   }, []);
   return (
-    <Workspace key={user?.id ?? "guest"} user={user} authReady={authReady} />
+    <Workspace key={user?.id ?? "guest"} user={user} authReady={authReady} initialRoute={initialRoute} />
   );
 }
 
 function Workspace({
   user,
   authReady,
+  initialRoute,
 }: {
   user: User | null;
   authReady: boolean;
+  initialRoute: Route;
 }) {
   // Supabase hands back a new user object on every auth event, including token
   // refreshes and tab focus. Effects keyed on the object itself therefore
@@ -115,11 +121,11 @@ function Workspace({
   // had not finished saving. Key them on the stable id instead.
   const userId = user?.id ?? null;
   const [projects, setProjects] = useState<Project[]>([createSampleProject()]);
-  const [route, setRoute] = useState<Route>({
-    view: "studio",
-    projectId: "sample-forest",
-    tab: "clips",
-  });
+  const [summaries, setSummaries] = useState<ProjectSummary[]>([]);
+  const [route, setRoute] = useState<Route>(initialRoute);
+  const [loadedProjectId, setLoadedProjectId] = useState<string>();
+  const [projectError, setProjectError] = useState("");
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [clipId, setClipId] = useState("clip-2");
   const [references, setReferences] =
     useState<ReferenceImage[]>(sampleReferences);
@@ -135,12 +141,14 @@ function Workspace({
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("All projects");
   const [refFilter, setRefFilter] = useState("All references");
+  const [referenceSuggestion, setReferenceSuggestion] = useState<{ name: string; description: string }>();
   const [listView, setListView] = useState(false);
   const [mobileNav, setMobileNav] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const navRef = useRef<HTMLElement>(null);
   const [notice, setNotice] = useState("");
   const [saveError, setSaveError] = useState("");
+  const [validationBusy, setValidationBusy] = useState(false);
   const [libraryError, setLibraryError] = useState("");
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [ready, setReady] = useState(false);
@@ -181,15 +189,15 @@ function Workspace({
   useEffect(() => {
     if (!mobileNav || !isMobile) return;
     const previousFocus = document.activeElement as HTMLElement | null;
-    navRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    navRef.current?.querySelector<HTMLElement>("button, a[href]")?.focus();
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setMobileNav(false);
         return;
       }
       if (event.key !== "Tab") return;
-      const controls = navRef.current?.querySelectorAll<HTMLButtonElement>(
-        "button:not(:disabled)",
+      const controls = navRef.current?.querySelectorAll<HTMLElement>(
+        "button:not(:disabled), a[href]",
       );
       if (!controls?.length) return;
       const first = controls[0],
@@ -211,21 +219,18 @@ function Workspace({
 
   useEffect(() => {
     const syncRoute = () => {
-      const parts = window.location.hash.replace(/^#\/?/, "").split("/");
-      if (parts[0] === "projects") setRoute({ view: "projects" });
-      else if (parts[0] === "library") setRoute({ view: "library" });
-      else if (parts[0] === "project" && parts[1])
-        setRoute({
-          view: "studio",
-          projectId: decodeURIComponent(parts[1]),
-          tab: ["story", "references", "clips"].includes(parts[2])
-            ? (parts[2] as Tab)
-            : "story",
-        });
+      const next = readStudioRoute(new URL(window.location.href));
+      if (/^#\/?(project|projects|library)(\/|$)/.test(window.location.hash))
+        window.history.replaceState(null, "", studioUrl(next));
+      setRoute(next);
     };
     syncRoute();
     window.addEventListener("hashchange", syncRoute);
-    return () => window.removeEventListener("hashchange", syncRoute);
+    window.addEventListener("popstate", syncRoute);
+    return () => {
+      window.removeEventListener("hashchange", syncRoute);
+      window.removeEventListener("popstate", syncRoute);
+    };
   }, []);
 
   useEffect(() => {
@@ -245,13 +250,10 @@ function Workspace({
         setSaveError("");
       }
     });
-    void loadAccountProjects(supabase, userId)
+    void loadProjectSummaries(supabase, userId)
       .then((saved) => {
         if (!active) return;
-        // Freshly loaded projects already match the database; recording them
-        // here keeps the autosave from rewriting them on the next render.
-        persisted.current = new Map(saved.map((item) => [item.id, item]));
-        setProjects([...saved, createSampleProject()]);
+        setSummaries(saved);
       })
       .catch((error: unknown) => {
         if (active)
@@ -269,6 +271,39 @@ function Workspace({
     };
   }, [authReady, userId]);
 
+  // Keep the request effect independent of local edits and token refreshes.
+  const latest = useRef({ projects, references });
+  useEffect(() => { latest.current = { projects, references }; }, [projects, references]);
+  const selectedProjectId = route.view === "studio" ? route.projectId : undefined;
+  useEffect(() => {
+    if (!authReady || !userId || !supabase || !selectedProjectId || selectedProjectId === "sample-forest") return;
+    let active = true;
+    const client = supabase;
+    queueMicrotask(() => { if (active) { setProjectError(""); setLoadedProjectId(undefined); } });
+    const request = saveQueue.current.then(async () => {
+      for (const item of latest.current.projects) {
+        if (!item.sample && persisted.current.get(item.id) !== item) {
+          await saveAccountProject(client, userId, item, latest.current.references);
+          persisted.current.set(item.id, item);
+        }
+      }
+    });
+    saveQueue.current = request.catch(() => {});
+    void request.then(() => loadAccountProject(client, userId, selectedProjectId))
+      .then((saved) => {
+        if (!active) return;
+        const loaded = saved[0];
+        if (!loaded) throw new Error("This project is unavailable or belongs to another account.");
+        persisted.current.set(loaded.id, loaded);
+        setProjects((current) => [...current.filter((p) => p.id !== loaded.id), loaded]);
+        setClipId(loaded.clips.find((c) => c.status !== "validated")?.id ?? loaded.clips[0]?.id ?? "");
+        setLoadedProjectId(loaded.id);
+      }).catch((error: unknown) => {
+        if (active) setProjectError(error instanceof Error ? error.message : "This project could not be loaded. Try again.");
+      });
+    return () => { active = false; };
+  }, [authReady, userId, selectedProjectId, loadAttempt]);
+
   useEffect(() => {
     if (!ready || !userId || !supabase) return;
     const client = supabase;
@@ -280,6 +315,7 @@ function Workspace({
       saveQueue.current = saveQueue.current
         .then(async () => {
           for (const item of changed) {
+            if (persisted.current.get(item.id) === item) continue;
             await saveAccountProject(client, userId, item, references);
             persisted.current.set(item.id, item);
           }
@@ -333,20 +369,17 @@ function Workspace({
   }, [userId]);
   useEffect(() => {
     if (userId) queueMicrotask(() => void loadLibrary());
-  }, [userId, loadLibrary]);
+  }, [userId, loadLibrary, selectedProjectId]);
 
-  const project = projects.find((p) => p.id === route.projectId);
+  const project = projects.find((p) => p.id === route.projectId &&
+    (p.sample || loadedProjectId === route.projectId));
   const clip =
     project?.clips.find((c) => c.id === clipId) ??
     project?.clips.find((c) => c.status !== "validated") ??
     project?.clips[0];
   const tab = route.tab ?? "clips";
   function navigate(next: Route) {
-    const hash =
-      next.view === "studio"
-        ? `#/project/${encodeURIComponent(next.projectId ?? "")}/${next.tab ?? "story"}`
-        : `#/${next.view}`;
-    window.location.assign(hash);
+    window.history.pushState(null, "", studioUrl(next));
     setRoute(next);
     setQuery("");
     setMobileNav(false);
@@ -357,12 +390,30 @@ function Workspace({
   const isRendering = (clipId: string) =>
     ["preparing", "queued", "running"].includes(renders[clipId]?.status ?? "");
   function modifyProject(patch: Partial<Project>) {
+    if (project && (patch.ratio || patch.quality) &&
+        project.clips.length > 0) {
+      notify("Output settings are fixed for this project's clips.");
+      return;
+    }
     if (project)
       saveProject({
         ...project,
         ...patch,
         updatedAt: new Date().toISOString(),
       });
+  }
+  function resolveReference(name: string, image?: ReferenceImage) {
+    if (!project) return;
+    if (project.clips.some((c) => isRendering(c.id))) {
+      notify("Wait for the current render before changing references.");
+      return;
+    }
+    try {
+      saveProject(resolveSuggestedReference(project, name, image));
+      notify(image ? "Image linked across clips. Recompile affected prompts before generating." : "Suggestion removed across draft clips.");
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Could not update references.");
+    }
   }
   // Polling is what ingests a finished render: the status route copies the video
   // out of RunPod into permanent storage. Keeping it in a named function means a
@@ -376,13 +427,13 @@ function Workspace({
         for (;;) {
           const { data } = await client.auth.getSession();
           if (!data.session) throw new Error("Sign in to generate clips.");
-          const statusResponse = await fetch(
+          const statusResponse = await readRenderStatus(() => fetch(
             `/api/renders?jobId=${encodeURIComponent(jobId)}`,
             {
               headers: { Authorization: `Bearer ${data.session.access_token}` },
               cache: "no-store",
             },
-          );
+          ));
           const result = await statusResponse.json();
           if (!statusResponse.ok)
             throw new Error(result.error ?? "Render status could not be read.");
@@ -441,7 +492,7 @@ function Workspace({
   // was reloaded or closed; without this the GPU time is paid for and the video
   // is never ingested.
   useEffect(() => {
-    if (!ready || !userId || !supabase) return;
+    if (!ready || !userId || !supabase || !selectedProjectId || selectedProjectId === "sample-forest") return;
     const client = supabase;
     let active = true;
     void (async () => {
@@ -449,6 +500,7 @@ function Workspace({
         .from(RENDER_JOB_TABLE)
         .select("id,clip_id,project_id,status")
         .eq("owner_id", userId)
+        .eq("project_id", selectedProjectId)
         .in("status", ["submitting", "queued", "running"]);
       if (error || !active || !data?.length) return;
       for (const job of data) {
@@ -467,7 +519,7 @@ function Workspace({
     return () => {
       active = false;
     };
-  }, [ready, userId, followRender]);
+  }, [ready, userId, followRender, selectedProjectId]);
 
   async function generateClip(target: Clip) {
     if (!project || !user || !supabase) {
@@ -628,20 +680,17 @@ function Workspace({
       }
     }
   }
-  function openProject(p: Project) {
-    setClipId(
-      p.clips.find((c) => c.status !== "validated")?.id ?? p.clips[0]?.id ?? "",
-    );
+  function openProject(p: ProjectSummary) {
     navigate({
       view: "studio",
       projectId: p.id,
-      tab: p.clips.length ? "clips" : "story",
+      tab: "clips",
     });
   }
   function createProject(p: Project) {
     setProjects((prev) => [p, ...prev]);
     setDialog(null);
-    openProject(p);
+    navigate({ view: "studio", projectId: p.id, tab: "story" });
     notify("Project created. Your project is saved to your account.");
   }
   function addClip() {
@@ -721,7 +770,11 @@ function Workspace({
         (refFilter === "My uploads" ? !r.sample : r.category === refFilter)) &&
       `${r.name} ${r.description}`.toLowerCase().includes(query.toLowerCase()),
   );
-  const projectList = projects.filter(
+  const projectSummaries: ProjectSummary[] = [...new Map([
+    ...summaries.map((p) => [p.id, p] as const),
+    ...projects.map((p) => [p.id, p] as const),
+  ]).values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const projectList = projectSummaries.filter(
     (p) =>
       p.title.toLowerCase().includes(query.toLowerCase()) &&
       (filter === "All projects" ||
@@ -789,7 +842,7 @@ function Workspace({
           >
             <FolderOpen size={19} />
             <span>Projects</span>
-            <span className="nav-count">{projects.length}</span>
+            <span className="nav-count">{projectSummaries.length}</span>
           </button>
           <button
             className={`nav-item ${route.view === "library" ? "active" : ""}`}
@@ -801,15 +854,17 @@ function Workspace({
         </nav>
         <div className="recent-nav">
           <span className="nav-caption">RECENT PROJECTS</span>
-          {projects.slice(0, 4).map((p) => (
-            <button
+          {projectSummaries.slice(0, 4).map((p) => (
+            <a
               key={p.id}
+              href={studioUrl({ view: "studio", projectId: p.id })}
+              title={p.title}
               className={`recent-item ${project?.id === p.id && route.view === "studio" ? "selected" : ""}`}
-              onClick={() => openProject(p)}
+              onClick={(e) => { if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) { e.preventDefault(); openProject(p); } }}
             >
               <span className="project-dot" />
               <span>{p.title}</span>
-            </button>
+            </a>
           ))}
         </div>
         <div className="sidebar-bottom">
@@ -983,6 +1038,7 @@ function Workspace({
                       seconds planned
                     </span>
                     <span>{project.ratio}</span>
+                    <span>{project.quality ?? "draft"} quality</span>
                     <span>{project.style}</span>
                   </div>
                 </div>
@@ -1163,7 +1219,7 @@ function Workspace({
                           Frame shape
                           <select
                             value={project.ratio}
-                            disabled={!canChangeProjectSettings(project)}
+                            disabled={project.clips.length > 0}
                             onChange={(e) =>
                               modifyProject({
                                 ratio: e.target.value as Project["ratio"],
@@ -1175,6 +1231,17 @@ function Workspace({
                             <option value="1:1">Square · 1:1</option>
                           </select>
                         </label>
+                        <label className="field">
+                          Quality
+                          <select value={project.quality ?? "draft"}
+                            disabled={project.clips.length > 0}
+                            onChange={(e) => modifyProject({ quality: e.target.value as Project["quality"] })}>
+                            <option value="draft">Draft</option>
+                            <option value="standard">Standard</option>
+                            <option value="high">High</option>
+                          </select>
+                        </label>
+                        {project.clips.length > 0 && <p className="small muted"><LockKeyhole size={13} /> Quality and frame size apply to every clip.</p>}
                         {!canChangeProjectSettings(project) && (
                           <p className="small muted">
                             <LockKeyhole size={13} /> Settings are locked after
@@ -1225,6 +1292,7 @@ function Workspace({
 
                 {tab === "clips" && (
                   <section className="clips-section">
+                    <ProjectMerge key={project.id} project={project} />
                     <div className="section-heading">
                       <div>
                         <h2>Your story, frame by frame.</h2>
@@ -1264,7 +1332,7 @@ function Workspace({
                                 const startIndex = position;
                                 position += group.clips.length;
                                 return (
-                                  <div key={group.chain} className="chain-group">
+                                  <div key={group.chain} className={`chain-group${group.clips.length > 1 ? " chain-group-connected" : ""}`}>
                                     {group.clips.map((c, offset) => {
                                       const index = startIndex + offset;
                                       return (
@@ -1303,13 +1371,18 @@ function Workspace({
                                             <div className="clip-card-bottom">
                                               <span
                                                 className={`status ${c.status === "validated" ? "approved" : ""}`}
+                                                aria-live="polite"
                                               >
-                                                {c.status === "validated" ? (
+                                                {isRendering(c.id) ? (
+                                                  <LoaderCircle size={12} className="spin" aria-hidden="true" />
+                                                ) : c.status === "validated" ? (
                                                   <Check size={12} />
                                                 ) : (
                                                   <span className="tiny-dot" />
                                                 )}
-                                                {c.status === "validated"
+                                                {isRendering(c.id)
+                                                  ? "Generating"
+                                                  : c.status === "validated"
                                                   ? "Validated"
                                                   : c.pendingDescription ||
                                                       c.requestedChange
@@ -1344,6 +1417,11 @@ function Workspace({
                             project={project}
                             clip={clip}
                             references={references}
+                            onResolveReference={resolveReference}
+                            onUploadReference={(suggestion) => {
+                              setReferenceSuggestion(suggestion);
+                              setDialog(user ? "upload" : "auth");
+                            }}
                             onChange={(patch) =>
                               saveProject(updateClip(project, clip.id, patch))
                             }
@@ -1407,8 +1485,10 @@ function Workspace({
           ) : route.view === "studio" ? (
             <div className="empty-state panel">
               <FolderOpen size={32} />
-              <h2>This project isn’t in this workspace.</h2>
-              <p>Projects belong to the account where they were created.</p>
+              <h2>{!authReady ? "Loading your account..." : !userId ? "Sign in to open this project" : projectError ? "Project unavailable" : "Loading project..."}</h2>
+              <p role="status">{projectError || (!userId && authReady ? "Use the account where this project was created." : "Fetching the saved project and clips.")}</p>
+              {!userId && authReady && <button className="button primary" onClick={() => setDialog("auth")}>Sign in</button>}
+              {projectError && <button className="button secondary" onClick={() => setLoadAttempt((n) => n + 1)}>Retry</button>}
               <button
                 className="button primary"
                 onClick={() => navigate({ view: "projects" })}
@@ -1460,7 +1540,7 @@ function Workspace({
                 <div>
                   <h2>
                     Your projects{" "}
-                    <span className="count-inline">{projects.length}</span>
+                    <span className="count-inline">{projectSummaries.length}</span>
                   </h2>
                   <p>Pick up where your imagination left off.</p>
                 </div>
@@ -1515,10 +1595,11 @@ function Workspace({
               </div>
               <div className={`project-grid ${listView ? "list-view" : ""}`}>
                 {projectList.map((p) => (
-                  <button
+                  <a
                     key={p.id}
                     className="project-card"
-                    onClick={() => openProject(p)}
+                    href={studioUrl({ view: "studio", projectId: p.id })}
+                    onClick={(e) => { if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) { e.preventDefault(); openProject(p); } }}
                   >
                     <div className="project-card-image">
                       <Photo src={p.image} alt={`${p.title} cover`} />
@@ -1531,11 +1612,10 @@ function Workspace({
                     </div>
                     <div className="project-card-info">
                       <h3>{p.title}</h3>
-                      <p>{p.story.replace(/@/g, "")}</p>
                       <div>
                         <span>
                           <Clapperboard size={13} />
-                          {p.clips.length} clips
+                          Open project
                         </span>
                         <span>{p.ratio}</span>
                         <span>
@@ -1543,7 +1623,7 @@ function Workspace({
                         </span>
                       </div>
                     </div>
-                  </button>
+                  </a>
                 ))}
                 <button
                   className="new-project-card"
@@ -1633,15 +1713,19 @@ function Workspace({
       {dialog === "upload" && user && (
         <UploadForm
           userId={user.id}
-          onClose={() => setDialog(null)}
+          suggestion={referenceSuggestion}
+          onClose={() => { setDialog(null); setReferenceSuggestion(undefined); }}
           onUploaded={(image) => {
             setReferences((prev) => [image, ...prev]);
-            if (project && route.view === "studio")
+            if (project && referenceSuggestion) {
+              resolveReference(referenceSuggestion.name, image);
+            } else if (project && route.view === "studio")
               modifyProject({
                 referenceIds: [...project.referenceIds, image.id],
                 ...(!project.image ? { image: image.url } : {}),
               });
             setDialog(null);
+            setReferenceSuggestion(undefined);
             notify("Image uploaded to your public account library.");
           }}
         />
@@ -1855,20 +1939,40 @@ function Workspace({
             </button>
             <button
               className="button primary"
-              onClick={() => {
+              disabled={validationBusy}
+              onClick={async () => {
                 const next = validateClip(project, clip.id);
-                if (next === project)
+                if (next === project) {
                   notify(
-                    "Validation needs a generated video, no pending edits, and all earlier clips validated.",
+                    "Validation needs a generated video, no pending edits, and earlier clips in this scene validated.",
                   );
-                else {
-                  saveProject(next);
-                  notify("Clip validated and locked.");
+                  return;
                 }
-                setDialog(null);
+                if (!supabase || !user) return;
+                setValidationBusy(true);
+                try {
+                  const client = supabase;
+                  saveQueue.current = saveQueue.current.then(() =>
+                    saveAccountProject(client, user.id, next, references),
+                  );
+                  await saveQueue.current;
+                  persisted.current.set(next.id, next);
+                  saveProject(next);
+                  setSaveError("");
+                  notify("Clip validated and locked.");
+                  setDialog(null);
+                } catch (error) {
+                  saveQueue.current = Promise.resolve();
+                  const message = error && typeof error === "object" && "message" in error
+                    ? String(error.message) : "Validation could not be saved. Please try again.";
+                  setSaveError(message);
+                  notify(message);
+                } finally {
+                  setValidationBusy(false);
+                }
               }}
             >
-              <CheckCheck size={16} /> Validate and lock
+              <CheckCheck size={16} /> {validationBusy ? "Saving validation…" : "Validate and lock"}
             </button>
           </div>
         </Modal>
@@ -2045,6 +2149,8 @@ function ClipEditor({
   onRemove,
   onNotice,
   onNext,
+  onResolveReference,
+  onUploadReference,
 }: {
   project: Project;
   clip: Clip;
@@ -2058,6 +2164,8 @@ function ClipEditor({
   onRemove: () => void;
   onNotice: (message: string) => void;
   onNext: () => void;
+  onResolveReference: (name: string, image?: ReferenceImage) => void;
+  onUploadReference: (suggestion: { name: string; description: string }) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [description, setDescription] = useState(
@@ -2075,7 +2183,7 @@ function ClipEditor({
   const continues = index > 0 && clip.continuesPrevious !== false;
   const usedRefs = references.filter((r) => clip.referenceIds.includes(r.id));
   const priorReady = project.clips
-    .slice(0, index)
+    .slice(chainMembers(project.clips, index).start, index)
     .every((c) => c.status === "validated");
   const nextExists = index < project.clips.length - 1;
   const editorRef = useRef<HTMLTextAreaElement>(null);
@@ -2267,17 +2375,40 @@ function ClipEditor({
           {usedRefs.map((r) => (
             <button
               key={r.id}
-              className="reference-chip"
+              className="reference-chip reference-linked"
               onClick={() => onMention(r.name)}
             >
               <Photo src={r.url} alt="" />
               {r.name}
+              <Check size={13} /> <span>Linked</span>
             </button>
           ))}
-          {!usedRefs.length && (
+          {!usedRefs.length && !clip.suggestedReferences?.length && (
             <span className="small muted">No references assigned yet.</span>
           )}
         </div>
+        {!!clip.suggestedReferences?.length && (
+          <div className="suggested-references">
+            {clip.suggestedReferences.map((suggestion) => (
+              <div className="reference-missing" key={suggestion.name}>
+                <div><ImagePlus size={16} /><strong>{suggestion.name}</strong><span>Image needed</span></div>
+                <p>{suggestion.description}</p>
+                {!locked && <div className="suggestion-actions">
+                  <button className="text-button" disabled={rendering} onClick={() => onUploadReference(suggestion)}><Upload size={15} /> Upload image</button>
+                  <select aria-label={`Choose image for ${suggestion.name}`} value="" disabled={rendering}
+                    onChange={(e) => {
+                      const image = references.find((r) => r.id === e.target.value);
+                      if (image) onResolveReference(suggestion.name, image);
+                    }}>
+                    <option value="">Choose from library</option>
+                    {references.filter((r) => project.sample || !r.sample).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                  </select>
+                  <button className="text-button" disabled={rendering} title={`Remove ${suggestion.name} suggestion`} aria-label={`Remove ${suggestion.name} suggestion`} onClick={() => onResolveReference(suggestion.name)}><Trash2 size={16} /></button>
+                </div>}
+              </div>
+            ))}
+          </div>
+        )}
         {showReferences && !locked && (
           <div className="clip-reference-picker">
             {references
@@ -2375,6 +2506,9 @@ function ClipEditor({
           </div>
         )}
       </div>
+      {renderState?.status === "failed" && renderState.error && (
+        <p role="alert">Render status: {renderState.error}</p>
+      )}
       <div className="editor-footer">
         <div>
           <span className="small muted">
@@ -2382,7 +2516,7 @@ function ClipEditor({
               ? "A foundation for what comes next."
               : priorReady
                 ? "Your story. Your creative direction."
-                : "Validate earlier clips before generating this one."}
+                : "Validate earlier clips in this scene before generating this one."}
           </span>
           {project.sample && (
             <span className="example-label">EXAMPLE WORKSPACE</span>
@@ -2414,6 +2548,7 @@ function ClipEditor({
             className={`button primary ${rendering ? "working" : ""}`}
             disabled={
               rendering ||
+              !!clip.suggestedReferences?.length ||
               project.sample ||
               !priorReady ||
               !clip.technicalPrompt ||

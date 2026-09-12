@@ -1,4 +1,39 @@
 @import "tailwindcss";
+.project-merge { margin-bottom: 24px; }
+.project-merge-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.merged-project-preview { display: block; max-width: 100%; width: 720px; max-height: 480px; margin-top: 16px; background: #151515; }
+.project-output-settings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 0 20px;
+}
+.reference-chip.reference-linked {
+  background: #eaf4e9;
+  border: 1px solid #bdd7bc;
+  color: #315532;
+  flex-wrap: wrap;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.suggested-references { display: grid; gap: 10px; margin: 12px 0; }
+.reference-missing {
+  background: #fcf0ef;
+  border: 1px solid #e6c4c1;
+  border-radius: 6px;
+  color: #803c38;
+  padding: 12px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.reference-missing > div { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.reference-missing p { margin: 8px 0 12px; }
+.reference-missing .suggestion-actions { gap: 12px; }
+.suggestion-actions select {
+  max-width: 100%; min-width: 0; min-height: 44px;
+  background: white; color: #443c3b; border: 1px solid #d6b8b5;
+  border-radius: 4px; padding: 6px;
+}
+.suggestion-actions button { min-height: 44px; min-width: 44px; }
 :root {
   --background: #f7f8f5;
   --foreground: #252c28;
@@ -685,18 +720,17 @@ img {
 .clip-track {
   display: contents;
 }
-/* Clips sharing a chain (one continuing the next) sit inside one shared,
-   darker container, so a cut is visible as a gap between containers without
-   opening a clip to check. A single-clip chain gets the same treatment for
-   consistency, even though there is nothing to visually join inside it. */
+/* Only connected sequences share a coloured background. */
 .chain-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  background: #e6ebda;
+  gap: 4px;
   border-radius: 12px;
   padding: 8px;
   margin-bottom: 10px;
+}
+.chain-group-connected {
+  background: #e6ebda;
 }
 .chain-group .clip-card {
   margin-bottom: 0;
@@ -3593,4 +3627,3 @@ hr {
 }
 
 .auth-tabs{margin-bottom:14px}.google-auth-button{width:100%;min-height:48px;border:1px solid #d9dfd2;border-radius:8px;background:#fff;color:#253126;display:flex;align-items:center;justify-content:center;gap:10px;font-weight:700}.google-auth-button:hover{border-color:#8da17a;background:#fafcf7}.google-auth-button>span{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#fff;border:1px solid #d7ddd0;color:#4285f4;font:700 14px Arial}.auth-divider{display:flex;align-items:center;gap:12px;color:#899385;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin:17px 0}.auth-divider::before,.auth-divider::after{content:'';height:1px;background:#e1e6dc;flex:1}.password-field{position:relative}.password-field input{padding-right:44px!important}.password-field button{position:absolute;right:5px;top:50%;transform:translateY(-50%);width:36px;height:36px;display:grid;place-items:center;color:#718068;border-radius:6px}.password-field button:hover{background:#edf2e7;color:#40543a}
-

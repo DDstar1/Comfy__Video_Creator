@@ -9,6 +9,7 @@ export type ReferenceImage = {
   sample?: boolean;
 };
 export type Clip = {
+  suggestedReferences?: { name: string; description: string }[];
   id: string;
   title: string;
   description: string;
@@ -45,6 +46,7 @@ export type Project = {
   title: string;
   story: string;
   ratio: "16:9" | "9:16" | "1:1";
+  quality?: "draft" | "standard" | "high";
   style: string;
   image: string;
   referenceIds: string[];
@@ -226,17 +228,42 @@ export function validateClip(project: Project, id: string): Project {
 export function canChangeProjectSettings(project: Project) {
   return !project.clips.some((c) => c.status === "validated");
 }
-export function newProject(title: string, story: string): Project {
+export function newProject(title: string, story: string, settings: Pick<Project, "ratio" | "quality"> = { ratio: "16:9", quality: "draft" }): Project {
   return {
     id: crypto.randomUUID(),
     title,
     story,
-    ratio: "16:9",
+    ...settings,
     style: "Cinematic",
     image: "",
     referenceIds: [],
     clips: [],
     updatedAt: new Date().toISOString(),
+  };
+}
+export function resolveSuggestedReference(project: Project, name: string, image?: ReferenceImage): Project {
+  const matches = (clip: Clip) => clip.status !== "validated" &&
+    clip.suggestedReferences?.some((ref) => ref.name === name);
+  if (image && !project.referenceIds.includes(image.id) && project.referenceIds.length >= 9)
+    throw new Error("A project can use up to nine reference images.");
+  if (image && project.clips.some((clip) => matches(clip) && !clip.referenceIds.includes(image.id) && clip.referenceIds.length >= 9))
+    throw new Error("One of these clips already has nine reference images.");
+  return {
+    ...project,
+    updatedAt: new Date().toISOString(),
+    referenceIds: image ? [...new Set([...project.referenceIds, image.id])] : project.referenceIds,
+    clips: project.clips.map((clip) => matches(clip) ? {
+      ...clip,
+      suggestedReferences: clip.suggestedReferences?.filter((ref) => ref.name !== name),
+      ...(image ? {
+        referenceIds: [...new Set([...clip.referenceIds, image.id])],
+        requestedChange: [clip.requestedChange, `Use the linked image @${image.name} (ID ${image.id}) as the visual reference for ${name}.`].filter(Boolean).join("\n").slice(0, 4000),
+        continuityStale: true,
+        status: "draft" as const,
+        videoUrl: undefined,
+        videoStoragePath: undefined,
+      } : {}),
+    } : clip),
   };
 }
 export function newClip(index: number): Clip {

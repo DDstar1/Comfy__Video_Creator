@@ -13,7 +13,12 @@ const AUDIO_VAE = "minimax_h3_audio_vae_fp32.safetensors";
 const TURBO_LORA =
   "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors";
 
-function dimensions(ratio: Project["ratio"]): [number, number] {
+export function dimensions(ratio: Project["ratio"], quality: Project["quality"] = "draft"): [number, number] {
+  if (quality !== "draft") {
+    const [long, short, square] = quality === "high" ? [1280, 736, 960] : [960, 544, 704];
+    if (ratio === "1:1") return [square, square];
+    return ratio === "9:16" ? [short, long] : [long, short];
+  }
   if (ratio === "9:16") return [352, 608];
   if (ratio === "1:1") return [448, 448];
   return [608, 352];
@@ -53,6 +58,10 @@ export async function assembleH3Workflow(
   const targetIndex = project.clips.findIndex((clip) => clip.id === target.id);
   if (targetIndex < 0)
     throw new Error("The selected clip is not in this project.");
+  if (target.suggestedReferences?.length)
+    throw new Error("Add or remove the suggested reference images before generating.");
+  if (target.continuityStale)
+    throw new Error("Recompile this clip's prompt before generating.");
   // Only this clip's own chain is sent. Including an earlier chain would hand
   // the model the previous scene's final frames as motion context, which is
   // what makes one scene morph into the next instead of cutting to it.
@@ -76,7 +85,7 @@ export async function assembleH3Workflow(
       image: await asDataUrl(reference.url),
     })),
   );
-  const [width, height] = dimensions(project.ratio);
+  const [width, height] = dimensions(project.ratio, project.quality);
   const workflow: Record<string, ApiNode> = {
     "3": {
       class_type: "UNETLoader",

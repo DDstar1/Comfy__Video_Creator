@@ -5,37 +5,48 @@ import {
   PROJECT_TABLE,
   PROMPT_VERSION_TABLE,
   GENERATED_VIDEO_BUCKET,
-} from "./supabase";
+} from "./supabase.ts";
 import type { Clip, Project, ReferenceImage } from "./studio-model";
 
 type Row = Record<string, unknown>;
+export type ProjectSummary = Pick<Project, "id" | "title" | "image" | "ratio" | "updatedAt" | "sample">;
 
-export async function loadAccountProjects(
+export async function loadProjectSummaries(client: SupabaseClient, ownerId: string): Promise<ProjectSummary[]> {
+  const { data, error } = await client.from(PROJECT_TABLE)
+    .select("id,title,image_url,ratio,updated_at").eq("owner_id", ownerId)
+    .order("updated_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((row) => ({ id: row.id, title: row.title,
+    image: row.image_url ?? "", ratio: row.ratio, updatedAt: row.updated_at }));
+}
+
+export async function loadAccountProject(
   client: SupabaseClient,
   ownerId: string,
+  projectId: string,
 ): Promise<Project[]> {
-  const [projectsResult, clipsResult, refsResult, versionsResult] =
+  const [projectsResult, clipsResult, refsResult] =
     await Promise.all([
       client
         .from(PROJECT_TABLE)
         .select("*")
         .eq("owner_id", ownerId)
+        .eq("id", projectId)
         .order("updated_at", { ascending: false }),
       client
         .from(CLIP_TABLE)
         .select("*")
         .eq("owner_id", ownerId)
+        .eq("project_id", projectId)
         .order("position"),
       client
         .from(PROJECT_REFERENCE_TABLE)
         .select("project_id,reference_image_id")
-        .eq("owner_id", ownerId),
-      client
-        .from(PROMPT_VERSION_TABLE)
-        .select("*")
-        .eq("owner_id", ownerId)
-        .order("version"),
+        .eq("owner_id", ownerId).eq("project_id", projectId),
     ]);
+  const clipIds = (clipsResult.data ?? []).map((clip) => clip.id);
+  const versionsResult = clipIds.length ? await client.from(PROMPT_VERSION_TABLE)
+    .select("*").eq("owner_id", ownerId).in("clip_id", clipIds).order("version") : { data: [], error: null };
   for (const result of [
     projectsResult,
     clipsResult,
@@ -63,6 +74,7 @@ export async function loadAccountProjects(
       description: String(row.description ?? ""),
       duration: Number(row.duration),
       referenceIds: (row.reference_ids as string[]) ?? [],
+      suggestedReferences: (row.suggested_references as Clip["suggestedReferences"]) ?? [],
       status: row.status as Clip["status"],
       image: String(row.image_url ?? ""),
       // Rows written before chains existed have no value; those clips continue
@@ -114,6 +126,7 @@ export async function loadAccountProjects(
     title: String(row.title),
     story: String(row.story ?? ""),
     ratio: row.ratio as Project["ratio"],
+    quality: (row.quality as Project["quality"]) ?? "draft",
     style: String(row.style ?? "Cinematic"),
     image: String(row.image_url ?? ""),
     referenceIds: refsByProject.get(String(row.id)) ?? [],
@@ -139,6 +152,7 @@ export async function saveAccountProject(
     title: project.title,
     story: project.story,
     ratio: project.ratio,
+    quality: project.quality ?? "draft",
     style: project.style,
     image_url: project.image,
     updated_at: project.updatedAt,
@@ -170,6 +184,7 @@ export async function saveAccountProject(
         description: clip.description,
         duration: clip.duration,
         reference_ids: clip.referenceIds,
+        suggested_references: clip.suggestedReferences ?? [],
         status: clip.status,
         image_url: clip.image,
         video_url: clip.videoStoragePath ?? null,

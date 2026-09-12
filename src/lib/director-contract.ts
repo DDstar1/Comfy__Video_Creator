@@ -2,12 +2,17 @@ import { z } from "zod";
 
 const text = z.string().trim().min(1).max(30000);
 const id = z.string().min(1).max(120);
+export const suggestedReferenceSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  description: z.string().trim().min(1).max(1000),
+}).strict();
 export const generatedClipSchema = z
   .object({
     title: text.max(160),
     description: text.max(6000),
     duration: z.union([z.literal(5), z.literal(10), z.literal(15)]),
     referenceIds: z.array(id).max(9),
+    suggestedReferences: z.array(suggestedReferenceSchema).max(4).optional(),
     mode: z.enum(["T2VA", "Ref2VA"]),
     technicalPrompt: text,
     endState: text.max(4000),
@@ -19,12 +24,16 @@ export type GeneratedClip = z.infer<typeof generatedClipSchema>;
 export const directorOutputSchema = z
   .object({ clips: z.array(generatedClipSchema).min(1).max(12) })
   .strict();
+export const directorResponseSchema = z.object({
+  clips: z.array(generatedClipSchema.required({ suggestedReferences: true })).min(1).max(12),
+}).strict();
 const inputClip = z.object({
   id,
   title: z.string().max(160),
   description: z.string().max(6000),
   duration: z.union([z.literal(5), z.literal(10), z.literal(15)]),
   referenceIds: z.array(id).max(9),
+  suggestedReferences: z.array(suggestedReferenceSchema).max(4).optional(),
   status: z.enum(["draft", "ready", "validated"]),
   continuesPrevious: z.boolean().optional(),
   technicalPrompt: z.string().max(30000).optional(),
@@ -41,6 +50,7 @@ export const directorInputSchema = z.object({
     story: text.max(50000),
     style: text.max(200),
     ratio: z.enum(["16:9", "9:16", "1:1"]),
+    quality: z.enum(["draft", "standard", "high"]).optional(),
     referenceIds: z.array(id).max(9),
     clips: z.array(inputClip).max(12),
   }),
@@ -97,6 +107,13 @@ export function parseDirectorOutput(raw: string, input: DirectorInput) {
   if (input.action === "revise" && result.clips.length !== 1)
     throw new Error("Expected one revised clip.");
   for (const clip of result.clips) {
+    if (input.action === "revise") {
+      const current = input.project.clips.find((c) => c.id === input.clipId);
+      clip.suggestedReferences = current?.suggestedReferences ?? [];
+    }
+    const suggestedNames = (clip.suggestedReferences ?? []).map((r) => r.name.toLowerCase());
+    if (new Set(suggestedNames).size !== suggestedNames.length)
+      throw new Error("The model returned duplicate reference suggestions.");
     if (
       new Set(clip.referenceIds).size !== clip.referenceIds.length ||
       clip.referenceIds.some((id) => !input.project.referenceIds.includes(id))

@@ -35,6 +35,8 @@ export function NewProjectForm({
   onCreate: (project: Project) => void;
 }) {
   const [kind, setKind] = useState<"scene" | "idea">("scene");
+  const [ratio, setRatio] = useState<Project["ratio"]>("16:9");
+  const [quality, setQuality] = useState<Project["quality"]>("draft");
   const [title, setTitle] = useState("");
   const [story, setStory] = useState("");
   const [fileName, setFileName] = useState("");
@@ -90,7 +92,7 @@ export function NewProjectForm({
             );
             return;
           }
-          onCreate(newProject(title.trim(), story.trim()));
+          onCreate(newProject(title.trim(), story.trim(), { ratio, quality }));
         }}
       >
         <label className="field">
@@ -140,6 +142,24 @@ export function NewProjectForm({
             </button>
           </>
         )}
+        <div className="project-output-settings">
+          <label className="field">
+            Device / frame size
+            <select value={ratio} onChange={(e) => setRatio(e.target.value as Project["ratio"])}>
+              <option value="16:9">Landscape / desktop (16:9)</option>
+              <option value="9:16">Portrait / phone (9:16)</option>
+              <option value="1:1">Square (1:1)</option>
+            </select>
+          </label>
+          <label className="field">
+            Quality
+            <select value={quality} onChange={(e) => setQuality(e.target.value as Project["quality"])}>
+              <option value="draft">Draft</option>
+              <option value="standard">Standard</option>
+              <option value="high">High</option>
+            </select>
+          </label>
+        </div>
         {error && (
           <p className="form-error" role="alert">
             {error}
@@ -385,15 +405,17 @@ export function UploadForm({
   userId,
   onClose,
   onUploaded,
+  suggestion,
 }: {
   userId: string;
   onClose: () => void;
   onUploaded: (image: ReferenceImage) => void;
+  suggestion?: { name: string; description: string };
 }) {
   const [file, setFile] = useState<File>();
   const [preview, setPreview] = useState("");
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
+  const [name, setName] = useState(suggestion?.name.replace(/[^\p{L}\p{N}_]/gu, "") ?? "");
+  const [description, setDescription] = useState(suggestion?.description ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [drag, setDrag] = useState(false);

@@ -21,6 +21,15 @@ export async function authenticatedClient(request: Request): Promise<{
     global: { headers: { Authorization: `Bearer ${token}` } },
   });
   const { data, error } = await client.auth.getUser(token);
-  if (error || !data.user) throw new Error("AUTH_REQUIRED");
+  if (error || !data.user) {
+    console.warn("Render authentication failed", JSON.stringify({
+      name: error?.name,
+      code: error?.code,
+      status: error?.status,
+    }));
+    if (error?.name === "AuthRetryableFetchError")
+      throw new Error("Account verification is temporarily unavailable. Please try again.");
+    throw new Error("AUTH_REQUIRED");
+  }
   return { client, user: data.user };
 }

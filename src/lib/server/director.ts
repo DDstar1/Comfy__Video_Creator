@@ -5,7 +5,7 @@ import type { ResponseInput } from "openai/resources/responses/responses";
 import {
   checkDirectorInput,
   parseDirectorOutput,
-  directorOutputSchema,
+  directorResponseSchema,
   type DirectorInput,
 } from "../director-contract.ts";
 
@@ -21,7 +21,16 @@ Return ONLY a JSON object {"clips":[...]} without Markdown fences or commentary.
 Each clip has exactly: title (short), description (human-readable, @Name mentions),
 duration (5,10,15 seconds), referenceIds (ordered selected IDs), mode (T2VA or Ref2VA),
 technicalPrompt (complete official H3 prompt string), endState (physical, camera and audio state),
-continuesPrevious (boolean).
+continuesPrevious (boolean), suggestedReferences (array of {name, description}).
+For plan, suggest up to four useful missing image references per clip, focusing on
+recurring characters, locations and important objects. Reuse exactly the same name
+and description across clips for the same suggestion. Do not suggest an image already
+supplied. Use [] when none would help. Suggestions are optional images, NOT supplied
+references: never put them in referenceIds or assign them a Picture number. Describe
+their subjects fully in ordinary words in both prompts, without a missing-image placeholder.
+For revise, preserve only the target clip's remaining suggestedReferences; never recreate
+removed suggestions. Newly linked referenceIds are authoritative: use their supplied
+images and descriptions to update the technical prompt. Respect project ratio and quality.
 continuesPrevious decides whether the sequence continues the previous clip or cuts to this one.
 Set it TRUE only when this clip is the same continuous camera take as the previous clip:
 same place, same subjects, action carrying straight on from the previous endState.
@@ -143,7 +152,7 @@ export async function runDirector(input: DirectorInput, signal?: AbortSignal) {
     {
       model: "gpt-5.6-luna",
       input: content,
-      text: { format: zodTextFormat(directorOutputSchema, "clip_plan"), verbosity: "medium" },
+      text: { format: zodTextFormat(directorResponseSchema, "clip_plan"), verbosity: "medium" },
       reasoning: { effort: "medium", mode: "standard", summary: "auto" },
       tools: [
         {

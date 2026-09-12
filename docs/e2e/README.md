@@ -3,25 +3,59 @@
 Last checkpoint: 2026-09-12. This is a reproducible manual/agent browser test,
 not an automated test suite.
 
-**Stages 1–6 pass.** Two clips rendered, stored and played back; clip 1 is
-validated and locked. Stage 7 (clips 3–4) is untested. The remaining product
-problem is not plumbing: the Extender cannot cut between scenes, so a planned
-scene change morphs instead — see
+Read the [latest live retest report](2026-09-12-live-retest.md) before resuming.
+It distinguishes historical passes from the current run and records job recovery,
+playback evidence, and outstanding checks. Scene cuts are now implemented using
+separate chains; the CPU-based final merge UI has now passed a local live test. See
 [the design note](../design/scene-cuts-and-merge.md).
 
 Two testing lessons worth carrying forward:
 
-- **Verify with `location.reload()`, not an F5 keypress.** F5 sent to the pane
+- **Verify with the browser tool's reload action, not an F5 keypress.** F5 sent to the pane
   did not always reload the page, and reading stale React state produced a false
   data-loss alarm. Confirm state against the database before concluding anything.
 - **The console buffer is flooded by sample-image 404s**, which evicts your own
   diagnostics. Clear it before a run you intend to read.
+
+## Added feature coverage
+
+The current local suite contains 34 tests (`npm test`). Production build and
+targeted ESLint passed after adding merge support; TypeScript also passed the
+later export-signature guard. New checks cover:
+
+- Suggestion linking across drafts, dismissal without changing scene text,
+  validation locks, unresolved-reference render blocking, and strict AI schema.
+- Draft/Standard/High workflow dimensions and portrait/square variants.
+- Canonical project/tab URLs, old bookmarks, lightweight summary queries and
+  account/project-scoped detail and history reads.
+- Merge source selection: use the last cumulative output per chain, never every
+  individual preview. A real FFmpeg test joins two generated video/audio fixtures
+  and decodes the resulting 48-frame MP4 with AAC audio.
+
+Browser checks covered creation controls at desktop and 390px mobile width,
+green Linked chips, direct project refresh, Back restoring the selected tab,
+four validated clips/seven references loading, and the merged fixture at
+19.783 seconds and 608 x 352 with no reported media error. The saved download
+reappeared after reload. No new GPU render was needed for this merge.
+
+Remaining checks include live Standard/High GPU output, production FFmpeg bundle
+and resource limits, ordinary customer billing and payment, and complete live
+upload/link/remove interaction coverage for newly AI-suggested references. Mocked
+query tests do not replace live RLS or concurrent-save testing. Refer to the dated
+report for the separately performed render, recovery and validation checks.
 
 ## Objective and authorized scope
 
 Test the real user journey: sign in → open/create project → upload references →
 plan clips → edit readable prompts → compile H3 prompts → render → watch video →
 validate → continue with the next clip. Fix failures and record evidence.
+
+After every clip is validated, use **Merge videos**, play the finished result,
+and verify that reopening the project restores its preview/download. Do not
+concatenate every clip preview: continuations already include their chain prefix.
+The current route is `/studio/projects/PROJECT_ID?tab=clips`; old hash links
+migrate. The latest fixture's merge is already stored, so reuse it before creating
+another export or submitting a GPU render.
 
 The user authorized testing with `abhuluimendestiny@gmail.com`, using physical
 pages 1–3 of the supplied Red Signal PDF and its reference directory. **The total
@@ -236,9 +270,11 @@ and the preview still works after reloading (fresh signed URL). Never publish
 service keys or private signed URLs in committed reports.
 
 After watching, use **Validate → Validate and lock**. Check the clip becomes
-read-only, reload, and confirm the status persists. At Clip N, only Clips 1–N are
-locked; later clips remain editable. Prior clips must already be validated before
-rendering/validating the next clip. Never force `validated` in the database or
+read-only, reload, and confirm the status persists. Within a continuous scene,
+prior clips must already be validated before rendering/validating the next clip.
+A clip marked **Cuts here** starts an independent chain and does not require
+earlier scenes to be validated. Later drafts remain editable. Never force
+`validated` in the database or
 pretend a still image is a completed video to get past the UI.
 
 ### 7. Sequential continuation

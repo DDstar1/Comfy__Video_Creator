@@ -1,8 +1,11 @@
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { authenticatedClient } from "@/lib/server/render-auth";
+import { recordAcceptedRender } from "@/lib/server/render-submission";
 import { hasUnlimitedGeneration } from "@/lib/server/billing-access";
 import { getVolumeObject, listChainSegments } from "@/lib/server/runpod-volume";
+import { dimensions } from "@/lib/render-workflow";
+import type { Project } from "@/lib/studio-model";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -135,13 +138,25 @@ export async function POST(request: Request) {
     assertClipWeaveWorkflow(input.workflow, input.clipId, input.images ?? []);
     const { data: clip, error: clipError } = await client
       .from(CLIPS)
-      .select("id,project_id,status,technical_prompt,continuity_stale")
+      .select("id,project_id,status,technical_prompt,continuity_stale,suggested_references")
       .eq("id", input.clipId)
       .eq("project_id", input.projectId)
       .eq("owner_id", user.id)
       .single();
     if (clipError || !clip)
       return Response.json({ error: "Clip not found." }, { status: 404 });
+    if (clip.suggested_references?.length)
+      return Response.json({ error: "Add or remove suggested references before rendering." }, { status: 409 });
+    const { data: project, error: projectError } = await client.from("comfyTR_projects")
+      .select("ratio,quality").eq("id", input.projectId).eq("owner_id", user.id).single();
+    if (projectError || !project) throw new Error("Project output settings could not be read.");
+    const [width, height] = dimensions(project.ratio as Project["ratio"], project.quality as Project["quality"]);
+    for (const node of Object.values(input.workflow) as { class_type: string; inputs: Record<string, unknown> }[]) {
+      if (node.class_type === "MiniMaxH3Extender") {
+        node.inputs.width = width;
+        node.inputs.height = height;
+      }
+    }
     if (clip.status === "validated")
       return Response.json(
         { error: "Validated clips cannot be rendered again." },
@@ -208,6 +223,7 @@ export async function POST(request: Request) {
       );
     }
 
+    let acceptedRunpodJobId = "";
     try {
       const { key, endpoint } = runpod();
       const result = await runpodRequest(
@@ -226,20 +242,32 @@ export async function POST(request: Request) {
       );
       const runpodJobId = typeof result.id === "string" ? result.id : "";
       if (!runpodJobId) throw new Error("RunPod did not return a job ID.");
-      const { error } = await client
+      acceptedRunpodJobId = runpodJobId;
+      console.info("Render accepted", JSON.stringify({ jobId: job.id, runpodJobId }));
+      await recordAcceptedRender(() => client
         .from(JOBS)
         .update({
           runpod_job_id: runpodJobId,
           status: "queued",
           updated_at: new Date().toISOString(),
         })
-        .eq("id", job.id);
-      if (error) throw error;
+        .eq("id", job.id));
       return Response.json(
         { jobId: job.id, runpodJobId, status: "queued" },
         { status: 202 },
       );
     } catch (error) {
+      if (acceptedRunpodJobId) {
+        // Keep the active row and reservation: the provider may still be
+        // working. Marking it failed would allow duplicate paid generation.
+        console.error("Accepted render tracking needs recovery", JSON.stringify({
+          jobId: job.id, runpodJobId: acceptedRunpodJobId,
+        }));
+        return Response.json({
+          error: "Your render was accepted, but its tracking could not be saved. Do not resubmit; contact support with this job ID.",
+          jobId: job.id,
+        }, { status: 503 });
+      }
       await client
         .from(JOBS)
         .update({
@@ -261,7 +289,11 @@ export async function POST(request: Request) {
     return Response.json(
       {
         error:
-          error instanceof Error ? error.message : "Invalid render request.",
+          error instanceof Error
+            ? error.message
+            : error && typeof error === "object" && "message" in error && typeof error.message === "string"
+              ? error.message
+              : "Invalid render request.",
       },
       { status: error instanceof z.ZodError ? 400 : 502 },
     );
