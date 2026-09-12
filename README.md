@@ -5,42 +5,22 @@ backend. It uses Next.js 16, React 19, TypeScript, Supabase, OpenAI, Zod and Luc
 See the [root README](../README.md) for overall status and [UI_PLAN.md](UI_PLAN.md)
 for the interface design.
 
-## End-to-end test checkpoint — 2026-09-11
+## Status
 
-Testing is in progress; this is not a claim that video generation passes.
+Both this repo and `runpod-worker-repo/` are pushed to `origin/main` as of
+`bb21cfc` (frontend) — see the root README's checkpoint sections for the full
+account of what changed and how it was verified. If this deploys to Vercel,
+confirm `RUNPOD_S3_VOLUME_ID` and `RUNPOD_S3_REGION` are set there alongside
+the existing `RUNPOD_S3_STORAGE_*` credentials before trusting render recovery
+in production — it works locally, but has not been checked against the
+production environment.
 
-- Production Google sign-in works on `www.clipweave.xyz`.
-- The verified owner account has unlimited platform generation credit. This is
-  enforced server-side by `billing-access.ts`; other users retain normal wallet
-  reservations. RunPod/OpenAI provider charges still apply. No top-up was made.
-- Project persistence now uses explicit inserts and mutable-column updates rather
-  than upserts containing protected identity columns (commit `2c04a3a`).
-- Owner billing access shipped in `a4d2e94` and was visible in the live wallet.
-- Created **Red Signal — Fracture — 20 second test**, project
-  `b60e775c-2c0f-479d-a134-96575fa26bc2`, based on physical PDF pages 1–3 of
-  *Red Signal: Echo of a Lie, Act 2*. User limit: no project over 20 seconds.
-- Uploaded and attached seven supplied images: Lyra, Tomas, Sayen, Wren,
-  Infirmary, BaseCorridor and TrainingVault. Project, story and reference
-  selections persisted after a full browser reload.
-- Live director planning produced four five-second Ref2VA clips: Lyra Wakes,
-  Blackout Confrontation, Directed Memory and Neural Strip, totaling 20 seconds.
-- Editing the first readable prompt failed with an invalid model-output error;
-  the original prompt was preserved. Exact malformed field was not captured.
-  Commit `507d32d` requests strict JSON schema output using `zodTextFormat`
-  while retaining H3 semantic/reference validation. It also preserves an entered
-  reference name when asynchronous image loading completes. Build and all 13
-  tests passed; Vercel reported the deployment READY. Live revision retry remains.
-- Testing moved to local Next.js for faster server logs and iteration. Run
-  `npm run dev -- --hostname 127.0.0.1 --port 3000` from `frontend`; open
-  `http://localhost:3000/studio`. Localhost requires its own login and an allowed
-  Supabase redirect to `http://localhost:3000/studio`. Use the existing project;
-  do not create a duplicate or expand its duration.
-- Local testing uses the configured remote Supabase, OpenAI and RunPod services:
-  writes are real and inference is billable. No mock render has been substituted.
-- Remaining: successful readable edit and brief change request, persisted prompt
-  history, first playable RunPod output, storage/preview verification, validation
-  locks and continuation into the next clip. Creem payment is outside this test.
-
+Local development for iterating on this repo: run
+`npm run dev -- --hostname 127.0.0.1 --port 3000`, open
+`http://localhost:3000/studio`. Localhost needs its own login and an allowed
+Supabase redirect to `http://localhost:3000/studio`. It connects to the
+configured remote Supabase, OpenAI and RunPod services — writes are real and
+inference is billable; no mock render exists.
 
 ## Current state
 
