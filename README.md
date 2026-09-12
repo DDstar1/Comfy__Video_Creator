@@ -307,11 +307,18 @@ distributed quotas and long-running job management remain deployment work.
 - References: account library, previews and public JPEG/PNG/WebP uploads up to 20 MiB.
 - Account: Supabase email/password sign-in, registration and sign-out.
 - Navigation: URL fragments, keyboard tabs, native dialogs and responsive drawer.
+- Clip sequence: a horizontally scrolling track on narrow layouts, a stacked
+  sidebar on wide ones. Clips sharing a chain render inside one shared, tinted
+  container — a gap between containers is a cut, one container holding several
+  cards is a continuous run — computed at render time from `chainIndexes`, not
+  stored separately. A clip being generated pulses in place.
 
 The frontend uses `comfyTR_reference_images` and `comfytr-reference-images`.
-Project selections currently remain local despite the database relationship tables
-being available. Uploads use immutable paths; metadata failures after file upload
-are surfaced, and orphan cleanup remains backend work. See [Supabase docs](../supabase/README.md).
+Project reference selections sync to `comfyTR_project_references` by diff (only
+changed ids are written), verified live after the autosave bug that used to
+delete-and-reinsert the whole set was fixed. Uploads use immutable paths;
+metadata failures after file upload are surfaced, and orphan cleanup remains
+backend work. See [Supabase docs](../supabase/README.md).
 
 Other implementation files: [studio-forms.tsx](src/components/studio-forms.tsx),
 [ui.tsx](src/components/ui.tsx), [supabase.ts](src/lib/supabase.ts), and
