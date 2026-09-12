@@ -63,13 +63,34 @@ project storage, attaches it to its clip and marks that clip ready for validatio
 The Generate button assembles the H3 Extender workflow, uploads the current clip's
 ordered references, submits the job and polls every five seconds. It shows preparation,
 queue and generation states before enabling video validation. **Verified live on
-2026-09-11 for two clips**, which then played back from the private bucket
-through signed URLs. In the sample project, reference stills and the sample
-validated clip remain examples rather than generated videos.
+2026-09-12 for a two-chain, three-clip sequence**, which then played back from
+the private bucket through signed URLs. In the sample project, reference stills
+and the sample validated clip remain examples rather than generated videos.
 
-Note that Final Decode returns the **cumulative** chain, not the newest clip
-alone: clip 2's stored video contains clip 1 plus the new footage. A clip card's
-preview is therefore the whole sequence so far.
+Clips are chained into scenes rather than one project-long take. A clip either
+continues the previous one (`continuesPrevious`, defaulting true) or cuts to a
+new chain; the director decides this per clip from the story, the customer can
+override it, and each chain gets its own `cache_namespace`
+(`user:project:chainIndex`) and its own motion context. Only a clip's own chain
+is sent to the Extender, so an earlier scene never leaks into a cut. Final
+Decode returns the **cumulative video for that chain**, not the newest clip
+alone — a two-clip chain's stored video contains both clips, but a fresh cut
+is exactly the length of that one clip. Validation, likewise, only waits on
+earlier clips in the same chain: a cut scene can be approved independently of
+the scene before it.
+
+A render survives a reload or a closed tab. Polling is what copies the finished
+video out of RunPod, so on load the app finds any of the user's renders still
+in flight and re-attaches to them, and re-reads the session on every poll pass
+rather than capturing it once. If RunPod's own job record has already expired
+by the time anyone polls it — its result is only queryable for roughly 30
+minutes after completion — the video still exists on the Network Volume as an
+ordinary side effect of the Extender's cache, and the server reads it from
+there directly over signed S3 requests, no RunPod job or GPU charge involved,
+for a single-clip chain. A chain with more than one clip needs its segments
+joined with ffmpeg, which the server does not have, so that case asks a RunPod
+worker to do the join instead. A clip being generated pulses in the sequence
+and its Generate button, so an in-flight render is visible without opening it.
 
 The studio includes a prepaid USD wallet. Creem top-ups start at $5. A render
 reserves $0.59, then settles the RunPod runtime at the configured hourly rate plus
@@ -92,6 +113,10 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLIC_KEY
 CHATGPT_KEY=YOUR_OPENAI_API_KEY
 RUNPOD_ENDPOINT_API_KEY=YOUR_RUNPOD_API_KEY
 RUNPOD_ENDPOINT_ID=nqpfrj6twlaz5h
+RUNPOD_S3_STORAGE_ACCESS_KEY=YOUR_RUNPOD_S3_ACCESS_KEY
+RUNPOD_S3_STORAGE_API_KEY=YOUR_RUNPOD_S3_SECRET_KEY
+RUNPOD_S3_VOLUME_ID=0oaqjjkos5
+RUNPOD_S3_REGION=EU-RO-1
 SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVER_ONLY_SERVICE_ROLE_KEY
 CREEM_API_KEY=YOUR_CREEM_API_KEY
 CREEM_WEBHOOK_SECRET=YOUR_CREEM_WEBHOOK_SECRET
@@ -101,9 +126,13 @@ RUNPOD_GPU_RATE_CENTS_PER_HOUR=58
 CLIPWEAVE_MARGIN_CENTS=30
 ```
 
-Only the Supabase URL/publishable key are browser configuration. `CHATGPT_KEY` and
-`RUNPOD_ENDPOINT_API_KEY` remains server-side. All `.env*` files are ignored; never expose a
-service-role, AI or RunPod key through a `NEXT_PUBLIC_` variable. Next.js loads
+Only the Supabase URL/publishable key are browser configuration. `CHATGPT_KEY`,
+`RUNPOD_ENDPOINT_API_KEY` and the `RUNPOD_S3_*` credentials remain server-side —
+the latter let the render route read a chain's video directly off the Network
+Volume when a job's own status has expired, over the same S3-compatible API
+`runpod-worker-repo` uses, via `src/lib/server/runpod-volume.ts`. All `.env*`
+files are ignored; never expose a service-role, AI, RunPod or RunPod S3 key
+through a `NEXT_PUBLIC_` variable. Next.js loads
 `.env.local` ahead of `.env`.
 
 ```powershell
@@ -135,9 +164,11 @@ Open **Project → Clips**:
 The backend returns a synchronized description and technical H3 prompt. Successful
 revisions retain the previous compiled version in Supabase history and flag later draft
 clips for continuity review. Failed requests preserve pending edits. Validated clips
-have no editing controls. Because validation requires every earlier clip to be
-validated first, validating Clip N leaves Clips 1 through N read-only while later
-clips remain editable. Supabase enforces the same immutable validated-prefix rule.
+have no editing controls. Validation requires every earlier clip **in the same
+chain** to be validated first — a clip that cuts to a new scene starts a fresh
+chain, so validating it does not depend on an earlier scene, and validating it
+leaves only that chain's own prefix read-only. Supabase enforces the same
+chain-scoped immutable-prefix rule.
 
 Choose **Create clip plan** on the Story tab for an empty project. Existing clips
 are revised individually. Only image references are supported; picture numbers map
@@ -156,7 +187,10 @@ but downloaded draft backups include them and their history.
 | [src/components/studio.tsx](src/components/studio.tsx)                                                                   | Prompt editor, API submission and Supabase persistence                          |
 | [src/app/page.tsx](src/app/page.tsx)                                                                                     | ClipWeave launch page                                                           |
 | [src/components/waitlist.tsx](src/components/waitlist.tsx)                                                               | Waitlist registration and masked queue                                          |
-| [src/lib/studio-model.ts](src/lib/studio-model.ts)                                                                       | Revision history, continuity flags and clip locking guards                      |
+| [src/lib/studio-model.ts](src/lib/studio-model.ts)                                                                       | Revision history, chain assignment (`chainIndexes`/`chainMembers`) and chain-scoped clip locking |
+| [src/lib/render-workflow.ts](src/lib/render-workflow.ts)                                                                 | Workflow assembly, scoped to the target clip's own chain                        |
+| [src/app/api/renders/route.ts](src/app/api/renders/route.ts)                                                            | Render submission, chain-namespace derivation, status polling and recovery      |
+| [src/lib/server/runpod-volume.ts](src/lib/server/runpod-volume.ts)                                                       | Direct S3-signed reads of a chain's video off the Network Volume                |
 
 Generated prompts live in project data, not in `director.ts` or `SKILL.md`.
 
@@ -168,31 +202,54 @@ The deployed Queue endpoint is `my_extender_endpoint` with ID
 `https://api.runpod.ai/v2/nqpfrj6twlaz5h/status/{job_id}`. Only a server route may
 attach the bearer API key.
 
-The render route derives the project-specific cache namespace from the verified
-Supabase user and the owned project. The browser cannot choose the namespace.
+The render route derives the cache namespace from the verified Supabase user,
+the owned project and the target clip's **chain**. The browser cannot choose it.
 
 The separate worker image accepts a ComfyUI API workflow in `input.workflow` and
 optional base64 reference images in `input.images`. It returns final MP4/MKV files
 in `output.videos`. `src/lib/render-workflow.ts` builds that workflow with the
-deployed model names, the validated prefix plus current clip, ordered image inputs,
-four-step Turbo LoRA settings and a 0.2 MP draft canvas. Submission, polling and
-permanent result storage are implemented.
+deployed model names, ordered image inputs, four-step Turbo LoRA settings and a
+0.2 MP draft canvas — and, since a chain model exists, only the validated prefix
+plus current clip **within the target clip's own chain**, never an earlier
+scene. Submission, polling and permanent result storage are implemented and
+verified live.
 
-Every request includes `input.cache_namespace`. The server route derives it from
-the verified Supabase user and owned project as
-`${user.id}:${project.id}`. The browser must not supply the authoritative user ID.
-Keeping this value stable lets later jobs reuse validated clips; different projects
-are isolated into different hashed directories on the Network Volume.
+Every request includes `input.cache_namespace`, `${user.id}:${project.id}:${chainIndex}`
+— note the added chain index, absent before scene cuts existed. `chainIndex`
+increments each time a clip does not continue the previous one; the server
+derives it from stored clip order, never the browser. The same value is also
+stored on the render job row, so recovery later does not have to recompute a
+chain index that could have drifted if clips were reordered or removed since.
+Keeping the value stable per chain lets later jobs in that chain reuse validated
+clips; different chains, projects and users are isolated into different hashed
+directories on the Network Volume.
 
 `RUNPOD_ENDPOINT_API_KEY` remains in server environment variables. It must not
 use a `NEXT_PUBLIC_` name or be sent to browser code. Worker setup and the request
-contract are documented in
+contract, including the `merge` and `fetch` job types, are documented in
 [RUNPOD_SERVERLESS.md](../runpod-worker-repo/RUNPOD_SERVERLESS.md).
 
-The live endpoint uses the published GHCR image, `EU-RO-1` and Network Volume
-`0oaqjjkos5`. It currently has minimum workers `0`, maximum workers `3`, a
-300-second idle timeout and a 30-minute job timeout (last recorded 2026-09-11).
-A playable endpoint render remains unverified.
+The live endpoint uses a GHCR image **pinned to a digest**, `EU-RO-1` and
+Network Volume `0oaqjjkos5`, minimum workers `0`, maximum workers `3`, a
+300-second idle timeout and a 30-minute job timeout. The digest pin exists
+because the endpoint previously tracked the mutable `runpod-latest` tag: the
+fleet ended up mixed mid-rollout, with old-image workers reporting empty model
+lists while new-image workers succeeded on the identical job, so which worker
+served a request decided whether it passed. Rolling out now means updating the
+template (`runpodctl template update uoq6ryaqu6 --image <ref>`), not just
+pushing to `main`.
+
+**Recovering an expired render.** A generation job's own `/status` result is
+only queryable for roughly 30 minutes after completion — verified live: a job
+that had genuinely finished (`executionTime` set, a video in its output) later
+404'd. The video survives that window regardless, since the Extender's disk
+cache writes it to the volume as ordinary operation. On a 404, the render route
+first tries reading the chain directly off the volume itself, over the S3-
+compatible API (`src/lib/server/runpod-volume.ts`) — no RunPod job, no GPU
+charge — which only works for a single-clip chain, since joining multiple
+segments needs ffmpeg. A multi-clip chain instead asks the worker to do that
+join via its `fetch` job type, verified live only for the single-segment case
+so far.
 
 The partial unique index on `comfyTR_render_jobs` permits only one active render per
 project, while different projects may use the endpoint's workers concurrently.
@@ -269,19 +326,24 @@ npm test
 npm run build
 ```
 
-Last recorded checks (2026-09-12): build, lint and 13 local tests passed. Tests
-cover draft/validation guards, revision history, H3 contracts and a mocked
-provider request. Browser checks covered planning, prompt revision, two live
-renders, playback, validation locking, clip removal and the responsive clip
-track. The built browser assets were checked for key exposure; `CHATGPT_KEY` was
-absent. Authenticated upload of seven real images and persistence after reload
-passed on 2026-09-11.
+Last recorded checks (2026-09-12): build, lint and 19 local tests passed. Tests
+cover draft/validation guards, revision history, H3 contracts, chain assignment
+and scoping (`tests/chains.test.mjs`), and a mocked provider request. Browser
+checks covered planning, prompt revision, three live renders across two chains,
+playback, validation locking, clip removal and the responsive clip track. The
+built browser assets were checked for key exposure; `CHATGPT_KEY` was absent.
+Authenticated upload of seven real images and persistence after reload passed
+on 2026-09-11.
 
-Note that the local tests do not cover persistence or auth lifecycle, which is
-where the two worst bugs found so far lived: an autosave that destroyed project
-references, and effects keyed on the Supabase user **object** rather than its id,
-which re-ran the project load on every token refresh and discarded unsaved edits.
-Both are fixed; neither would have been caught by this suite.
+Note that the local tests do not cover persistence, auth lifecycle or the
+render-recovery paths, which is where the worst bugs found so far lived: an
+autosave that destroyed project references; effects keyed on the Supabase user
+**object** rather than its id, which re-ran the project load on every token
+refresh and discarded unsaved edits; and results only ingesting while a tab
+kept polling, stranding a render that had already finished on RunPod. All are
+fixed; none would have been caught by this suite. The direct-volume recovery
+path was instead verified with a standalone script against the real volume —
+see `frontend/src/lib/server/runpod-volume.ts`.
 
 Optional live check, which makes real API requests:
 
