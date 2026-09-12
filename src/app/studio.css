@@ -679,6 +679,12 @@ img {
 .clip-sequence {
   min-width: 0;
 }
+/* The wide layout keeps the cards stacked in the sidebar column, so the track
+   stays transparent to layout here and only becomes a scroller once the
+   workspace collapses to a single column. */
+.clip-track {
+  display: contents;
+}
 .sequence-header {
   display: flex;
   justify-content: space-between;
@@ -797,22 +803,6 @@ img {
 .status.approved {
   color: #6f8556;
 }
-.add-clip-card {
-  min-height: 43px;
-  border: 1px dashed #d5ddc8;
-  border-radius: 8px;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  color: #78896a;
-  font-size: 11px;
-  margin-top: 15px;
-}
-.add-clip-card:hover {
-  background: #edf2e5;
-}
 .continuity-note {
   display: flex;
   align-items: flex-start;
@@ -842,6 +832,28 @@ img {
   align-items: center;
   padding: 18px 22px;
   gap: 8px;
+}
+.editor-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.clip-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #e3e7dd;
+  border-radius: 8px;
+  background: #fff;
+  color: #8a7f6a;
+}
+.clip-remove:hover {
+  border-color: #d9c3c3;
+  background: #fbf2f2;
+  color: #a3564d;
 }
 .eyebrow {
   font-size: 9px;
@@ -2524,19 +2536,26 @@ hr {
     grid-template-columns: 1fr;
   }
   .clip-sequence {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 9px;
+    display: block;
   }
   .sequence-header {
-    grid-column: 1/-1;
-    margin: 0;
+    margin: 0 0 10px;
   }
-  .clip-card {
-    margin: 0;
+  .clip-track {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    /* Padding keeps the focus ring and selected-card outline from being
+       clipped by the scroll container. */
+    padding: 2px 2px 10px;
+    margin-bottom: 10px;
   }
-  .add-clip-card {
-    grid-column: 1/-1;
+  .clip-track > .clip-card {
+    flex: 0 0 clamp(228px, 62vw, 292px);
+    scroll-snap-align: start;
     margin: 0;
   }
   .continuity-note {
@@ -3040,8 +3059,8 @@ hr {
     font-size: 11px;
     padding: 8px;
   }
-  .clip-sequence {
-    grid-template-columns: 1fr;
+  .clip-track > .clip-card {
+    flex-basis: clamp(200px, 76vw, 248px);
   }
   .clip-card {
     padding: 10px;

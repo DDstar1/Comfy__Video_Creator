@@ -29,6 +29,7 @@ import {
   LogOut,
   Menu,
   Plus,
+  Trash2,
   Search,
   Settings2,
   Sparkles,
@@ -100,6 +101,11 @@ function Workspace({
   user: User | null;
   authReady: boolean;
 }) {
+  // Supabase hands back a new user object on every auth event, including token
+  // refreshes and tab focus. Effects keyed on the object itself therefore
+  // re-ran and replaced local state with the database, discarding edits that
+  // had not finished saving. Key them on the stable id instead.
+  const userId = user?.id ?? null;
   const [projects, setProjects] = useState<Project[]>([createSampleProject()]);
   const [route, setRoute] = useState<Route>({
     view: "studio",
@@ -217,7 +223,7 @@ function Workspace({
   useEffect(() => {
     if (!authReady) return;
     let active = true;
-    if (!user || !supabase) {
+    if (!userId || !supabase) {
       queueMicrotask(() => {
         if (active) setReady(true);
       });
@@ -231,7 +237,7 @@ function Workspace({
         setSaveError("");
       }
     });
-    void loadAccountProjects(supabase, user.id)
+    void loadAccountProjects(supabase, userId)
       .then((saved) => {
         if (!active) return;
         // Freshly loaded projects already match the database; recording them
@@ -253,10 +259,10 @@ function Workspace({
     return () => {
       active = false;
     };
-  }, [authReady, user]);
+  }, [authReady, userId]);
 
   useEffect(() => {
-    if (!ready || !user || !supabase) return;
+    if (!ready || !userId || !supabase) return;
     const client = supabase;
     const changed = projects.filter(
       (item) => !item.sample && persisted.current.get(item.id) !== item,
@@ -266,7 +272,7 @@ function Workspace({
       saveQueue.current = saveQueue.current
         .then(async () => {
           for (const item of changed) {
-            await saveAccountProject(client, user.id, item, references);
+            await saveAccountProject(client, userId, item, references);
             persisted.current.set(item.id, item);
           }
         })
@@ -280,17 +286,17 @@ function Workspace({
         );
     }, 800);
     return () => clearTimeout(timer);
-  }, [projects, ready, references, user]);
+  }, [projects, ready, references, userId]);
 
   const loadLibrary = useCallback(async () => {
-    if (!user || !supabase) return;
+    if (!userId || !supabase) return;
     setLibraryLoading(true);
     setLibraryError("");
     try {
       const { data, error } = await supabase
         .from(REFERENCE_TABLE)
         .select("id,name,description,storage_path")
-        .eq("owner_id", user.id)
+        .eq("owner_id", userId)
         .is("archived_at", null)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -316,10 +322,10 @@ function Workspace({
     } finally {
       setLibraryLoading(false);
     }
-  }, [user]);
+  }, [userId]);
   useEffect(() => {
-    if (user) queueMicrotask(() => void loadLibrary());
-  }, [user, loadLibrary]);
+    if (userId) queueMicrotask(() => void loadLibrary());
+  }, [userId, loadLibrary]);
 
   const project = projects.find((p) => p.id === route.projectId);
   const clip =
@@ -485,7 +491,15 @@ function Workspace({
             "The writing assistant could not complete this request.",
         );
       const parsed = directorOutputSchema.parse({ clips: result.clips });
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted) {
+        if (process.env.NODE_ENV === "development")
+          console.warn("Director result discarded: aborted after response", {
+            action,
+            clipId: target?.id,
+            responseId: result.responseId,
+          });
+        return;
+      }
       if (action === "plan") {
         const clips = parsed.clips.map((c) => ({
           ...newClip(0),
@@ -502,14 +516,27 @@ function Workspace({
         setClipId(clips[0].id);
         navigate({ view: "studio", projectId: snapshot.id, tab: "clips" });
       } else if (target) {
-        saveProject(
-          applyCompiledClip(
-            snapshot,
-            target.id,
-            parsed.clips[0],
-            result.responseId,
-          ),
+        const applied = applyCompiledClip(
+          snapshot,
+          target.id,
+          parsed.clips[0],
+          result.responseId,
         );
+        if (process.env.NODE_ENV === "development") {
+          const before = snapshot.clips.find((c) => c.id === target.id);
+          const after = applied.clips.find((c) => c.id === target.id);
+          console.warn("Director revise outcome", {
+            clipId: target.id,
+            returnedSnapshotUnchanged: applied === snapshot,
+            clipPresentInSnapshot: Boolean(before),
+            statusInSnapshot: before?.status,
+            promptChanged: before?.technicalPrompt !== after?.technicalPrompt,
+            descriptionChanged: before?.description !== after?.description,
+            revisionBefore: before?.revision,
+            revisionAfter: after?.revision,
+          });
+        }
+        saveProject(applied);
       }
       notify(
         action === "plan"
@@ -552,6 +579,18 @@ function Workspace({
     modifyProject({ clips: [...project.clips, next] });
     setClipId(next.id);
     notify("A new clip draft is ready for your ideas.");
+  }
+  function removeClip(id: string) {
+    if (!project) return;
+    const index = project.clips.findIndex((c) => c.id === id);
+    const target = project.clips[index];
+    // Validated clips are the motion context later clips were generated from,
+    // so removing one would invalidate work that is already approved.
+    if (!target || target.status === "validated") return;
+    const remaining = project.clips.filter((c) => c.id !== id);
+    modifyProject({ clips: remaining });
+    setClipId(remaining[Math.max(0, index - 1)]?.id ?? "");
+    notify("Clip removed.");
   }
   function toggleReference(id: string) {
     if (!project) return;
@@ -1136,8 +1175,9 @@ function Workspace({
                               {String(project.clips.length).padStart(2, "0")}
                             </span>
                           </div>
-                          {project.clips.map((c, index) => (
-                            <button
+                          <div className="clip-track">
+                            {project.clips.map((c, index) => (
+                              <button
                               key={c.id}
                               className={`clip-card ${clip?.id === c.id ? "selected" : ""}`}
                               onClick={() => setClipId(c.id)}
@@ -1190,10 +1230,8 @@ function Workspace({
                                 </div>
                               </div>
                             </button>
-                          ))}
-                          <button className="add-clip-card" onClick={addClip}>
-                            <Plus size={17} /> Add another moment
-                          </button>
+                            ))}
+                          </div>
                           <div className="continuity-note">
                             <AudioLines size={18} />
                             <p>
@@ -1218,6 +1256,7 @@ function Workspace({
                             }
                             renderState={renders[clip.id]}
                             onGenerate={() => void generateClip(clip)}
+                            onRemove={() => removeClip(clip.id)}
                             onValidate={() => setDialog("validate")}
                             onNotice={notify}
                             onNext={() => {
@@ -1906,6 +1945,7 @@ function ClipEditor({
   onGenerate,
   onCompile,
   onValidate,
+  onRemove,
   onNotice,
   onNext,
 }: {
@@ -1918,6 +1958,7 @@ function ClipEditor({
   onGenerate: () => void;
   onCompile: (patch?: Partial<Clip>) => void;
   onValidate: () => void;
+  onRemove: () => void;
   onNotice: (message: string) => void;
   onNext: () => void;
 }) {
@@ -1955,14 +1996,26 @@ function ClipEditor({
           </span>
           <h3>{clip.title}</h3>
         </div>
-        <span className={`badge ${locked ? "green" : "ochre"}`}>
-          {locked ? <LockKeyhole size={12} /> : <span className="tiny-dot" />}
-          {locked
-            ? "Validated & locked"
-            : clip.pendingDescription || clip.requestedChange
-              ? "Revision pending"
-              : "Ready to shape"}
-        </span>
+        <div className="editor-heading-actions">
+          <span className={`badge ${locked ? "green" : "ochre"}`}>
+            {locked ? <LockKeyhole size={12} /> : <span className="tiny-dot" />}
+            {locked
+              ? "Validated & locked"
+              : clip.pendingDescription || clip.requestedChange
+                ? "Revision pending"
+                : "Ready to shape"}
+          </span>
+          {!locked && (
+            <button
+              className="clip-remove"
+              onClick={onRemove}
+              title="Remove this clip"
+              aria-label={`Remove clip ${index + 1}, ${clip.title}`}
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
       </div>
       <button
         className="scene-preview"
