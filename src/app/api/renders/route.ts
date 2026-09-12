@@ -1,6 +1,8 @@
 import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { authenticatedClient } from "@/lib/server/render-auth";
 import { hasUnlimitedGeneration } from "@/lib/server/billing-access";
+import { getVolumeObject, listChainSegments } from "@/lib/server/runpod-volume";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -294,6 +296,103 @@ async function artifactBytes(artifact: Artifact) {
   return new Uint8Array(await response.arrayBuffer());
 }
 
+type RenderJobRow = {
+  id: string;
+  project_id: string;
+  clip_id: string;
+  [key: string]: unknown;
+};
+
+function extensionAndMime(filename: string) {
+  const lower = filename.toLowerCase();
+  const extension = lower.endsWith(".mkv")
+    ? "mkv"
+    : lower.endsWith(".webm")
+      ? "webm"
+      : lower.endsWith(".mov")
+        ? "mov"
+        : "mp4";
+  const mime =
+    extension === "mkv"
+      ? "video/x-matroska"
+      : extension === "webm"
+        ? "video/webm"
+        : extension === "mov"
+          ? "video/quicktime"
+          : "video/mp4";
+  return { extension, mime };
+}
+
+// Shared by a normal completed job and by direct-volume recovery, so both end
+// at the same place: uploaded into the account's own storage, published, and
+// settled. `runtimeMs` is 0 for a volume read, since no new GPU time was spent
+// retrieving bytes that already existed -- it settles at the configured floor
+// rather than the original render's true cost, which was never captured.
+async function ingestVideoBytes(
+  client: SupabaseClient,
+  job: RenderJobRow,
+  bytes: Uint8Array,
+  filename: string,
+  runtimeMs: number,
+) {
+  if (!bytes.byteLength) throw new Error("The video data was empty.");
+  const { extension, mime } = extensionAndMime(filename);
+  const path = `${job.owner_id}/${job.project_id}/${job.clip_id}/${crypto.randomUUID()}.${extension}`;
+  const upload = await client.storage
+    .from(BUCKET)
+    .upload(path, bytes, { contentType: mime, upsert: false });
+  if (upload.error) throw upload.error;
+  const published = await client.rpc("comfyTR_publish_render_result", {
+    job_uuid: job.id,
+    object_path: path,
+    original_filename: filename,
+    content_type: mime,
+    content_bytes: bytes.byteLength,
+  });
+  if (published.error) {
+    await client.storage.from(BUCKET).remove([path]);
+    throw published.error;
+  }
+  const settlement = await client.rpc("comfyTR_settle_render", {
+    job_uuid: job.id,
+    charge_amount: finalCharge(runtimeMs),
+    execution_ms: runtimeMs,
+  });
+  if (settlement.error) throw settlement.error;
+  const signed = await client.storage.from(BUCKET).createSignedUrl(path, 3600);
+  if (signed.error) throw signed.error;
+  return Response.json({
+    ...job,
+    status: "completed",
+    videoUrl: signed.data.signedUrl,
+    videoStoragePath: path,
+    asset: published.data,
+  });
+}
+
+/**
+ * Try to recover a render straight from the Network Volume, bypassing RunPod
+ * entirely, when the chain is exactly one clip -- the common case, since a
+ * multi-clip chain's segments need ffmpeg to join and only the worker has
+ * that. Returns null when this path cannot handle it (no segments, more than
+ * one, or the volume read itself failed), leaving the caller to fall back to
+ * the worker's "fetch" job.
+ */
+async function recoverFromVolume(
+  client: SupabaseClient,
+  job: RenderJobRow,
+  cacheNamespace: string,
+) {
+  try {
+    const segments = await listChainSegments(cacheNamespace);
+    if (segments.length !== 1) return null;
+    const bytes = await getVolumeObject(segments[0]);
+    return await ingestVideoBytes(client, job, bytes, segments[0].split("/").pop()!, 0);
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(request: Request) {
   try {
     const { client, user } = await authenticatedClient(request);
@@ -328,10 +427,21 @@ export async function GET(request: Request) {
       // genuinely completed. The video survives on the Network Volume as an
       // ordinary side effect of the Extender's disk cache, independent of that
       // window, so recover it there instead of treating this render as lost.
-      // Swap in a fresh runpod_job_id and let the normal poll loop pick it up;
-      // if the volume copy is also gone, that job fails fast on its own and
-      // falls through to the ordinary failure path below.
       if (statusError instanceof RunpodRequestError && statusError.status === 404 && job.cache_namespace) {
+        // Try a direct read from the volume first: no RunPod job, no GPU
+        // billing, no cold start. It only handles a single-clip chain, since
+        // joining multiple segments needs ffmpeg, which this server does not
+        // have.
+        const direct = await recoverFromVolume(
+          client,
+          job as RenderJobRow,
+          String(job.cache_namespace),
+        );
+        if (direct) return direct;
+        // Otherwise ask the worker to do it, which can join multiple segments.
+        // Swap in a fresh runpod_job_id and let the normal poll loop pick it
+        // up; if the volume copy is also gone, that job fails fast on its own
+        // and falls through to the ordinary failure path below.
         try {
           const fetchJob = await runpodRequest(
             `https://api.runpod.ai/v2/${endpoint}/run`,
@@ -395,57 +505,9 @@ export async function GET(request: Request) {
         throw new Error("RunPod completed without an MP4/MKV video.");
       const filename =
         typeof artifact.filename === "string" ? artifact.filename : "clip.mp4";
-      const extension = filename.toLowerCase().endsWith(".mkv")
-        ? "mkv"
-        : filename.toLowerCase().endsWith(".webm")
-          ? "webm"
-          : filename.toLowerCase().endsWith(".mov")
-            ? "mov"
-            : "mp4";
-      const mime =
-        extension === "mkv"
-          ? "video/x-matroska"
-          : extension === "webm"
-            ? "video/webm"
-            : extension === "mov"
-              ? "video/quicktime"
-              : "video/mp4";
       const bytes = await artifactBytes(artifact);
-      if (!bytes.byteLength) throw new Error("RunPod returned an empty video.");
-      const path = `${user.id}/${job.project_id}/${job.clip_id}/${crypto.randomUUID()}.${extension}`;
-      const upload = await client.storage
-        .from(BUCKET)
-        .upload(path, bytes, { contentType: mime, upsert: false });
-      if (upload.error) throw upload.error;
-      const published = await client.rpc("comfyTR_publish_render_result", {
-        job_uuid: job.id,
-        object_path: path,
-        original_filename: filename,
-        content_type: mime,
-        content_bytes: bytes.byteLength,
-      });
-      if (published.error) {
-        await client.storage.from(BUCKET).remove([path]);
-        throw published.error;
-      }
       const runtimeMs = Math.max(0, Number(result.executionTime ?? result.execution_time ?? 0));
-      const settlement = await client.rpc("comfyTR_settle_render", {
-        job_uuid: job.id,
-        charge_amount: finalCharge(runtimeMs),
-        execution_ms: runtimeMs,
-      });
-      if (settlement.error) throw settlement.error;
-      const signed = await client.storage
-        .from(BUCKET)
-        .createSignedUrl(path, 3600);
-      if (signed.error) throw signed.error;
-      return Response.json({
-        ...job,
-        status: "completed",
-        videoUrl: signed.data.signedUrl,
-        videoStoragePath: path,
-        asset: published.data,
-      });
+      return await ingestVideoBytes(client, job as RenderJobRow, bytes, filename, runtimeMs);
     } catch (ingestionError) {
       const message =
         ingestionError instanceof Error
