@@ -62,10 +62,14 @@ reference selections, prompt history, render jobs and generated-video metadata.
 project storage, attaches it to its clip and marks that clip ready for validation.
 The Generate button assembles the H3 Extender workflow, uploads the current clip's
 ordered references, submits the job and polls every five seconds. It shows preparation,
-queue and generation states before enabling video validation. One live end-to-end
-render still needs verification.
-Reference stills and the sample validated clip
-are examples, not generated videos.
+queue and generation states before enabling video validation. **Verified live on
+2026-09-11 for two clips**, which then played back from the private bucket
+through signed URLs. In the sample project, reference stills and the sample
+validated clip remain examples rather than generated videos.
+
+Note that Final Decode returns the **cumulative** chain, not the newest clip
+alone: clip 2's stored video contains clip 1 plus the new footage. A clip card's
+preview is therefore the whole sequence so far.
 
 The studio includes a prepaid USD wallet. Creem top-ups start at $5. A render
 reserves $0.59, then settles the RunPod runtime at the configured hourly rate plus
@@ -265,12 +269,19 @@ npm test
 npm run build
 ```
 
-Last recorded checks (2026-09-10): build, lint and 12 local tests passed; TypeScript
-passed after the final route adjustment. Tests cover draft/validation guards,
-revision history, H3 contracts and a mocked provider request. Browser checks covered
-prompt-edit controls and locked clips, plus earlier workspace and responsive flows.
-The built browser assets were checked for key exposure; `CHATGPT_KEY` was absent.
-Authenticated upload of seven real images and persistence after reload passed on 2026-09-11.
+Last recorded checks (2026-09-12): build, lint and 13 local tests passed. Tests
+cover draft/validation guards, revision history, H3 contracts and a mocked
+provider request. Browser checks covered planning, prompt revision, two live
+renders, playback, validation locking, clip removal and the responsive clip
+track. The built browser assets were checked for key exposure; `CHATGPT_KEY` was
+absent. Authenticated upload of seven real images and persistence after reload
+passed on 2026-09-11.
+
+Note that the local tests do not cover persistence or auth lifecycle, which is
+where the two worst bugs found so far lived: an autosave that destroyed project
+references, and effects keyed on the Supabase user **object** rather than its id,
+which re-ran the project load on every token refresh and discarded unsaved edits.
+Both are fixed; neither would have been caught by this suite.
 
 Optional live check, which makes real API requests:
 

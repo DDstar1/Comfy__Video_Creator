@@ -1,7 +1,21 @@
 # ClipWeave end-to-end test and Claude Code handoff
 
-Last checkpoint: 2026-09-11. This is a reproducible manual/agent browser test,
-not an automated test suite and not a claim that the full pipeline passes.
+Last checkpoint: 2026-09-12. This is a reproducible manual/agent browser test,
+not an automated test suite.
+
+**Stages 1–6 pass.** Two clips rendered, stored and played back; clip 1 is
+validated and locked. Stage 7 (clips 3–4) is untested. The remaining product
+problem is not plumbing: the Extender cannot cut between scenes, so a planned
+scene change morphs instead — see
+[the design note](../design/scene-cuts-and-merge.md).
+
+Two testing lessons worth carrying forward:
+
+- **Verify with `location.reload()`, not an F5 keypress.** F5 sent to the pane
+  did not always reload the page, and reading stale React state produced a false
+  data-loss alarm. Confirm state against the database before concluding anything.
+- **The console buffer is flooded by sample-image 404s**, which evicts your own
+  diagnostics. Clear it before a run you intend to read.
 
 ## Objective and authorized scope
 
@@ -142,7 +156,7 @@ readable description. Example thumbnails are not rendered videos.
 
 **Already passed:** a live Ref2VA plan produced the four listed five-second clips.
 
-### 3. Readable prompt edit — current blocker
+### 3. Readable prompt edit — PASSES
 
 Select **Lyra Wakes → Edit description**. The current pending edit is:
 
@@ -157,21 +171,24 @@ revision increment, saved previous prompt version, and later drafts marked for
 continuity review. Reload after saving to prove persistence. On failure, verify
 the original technical prompt remains intact and the pending edit is retained.
 
-**Current result:** both production and the latest connected local retry show
-“The model returned an invalid prompt. Your previous version is unchanged;
-please retry.” The local retry still failed after commit `507d32d` introduced
-strict JSON schema output. **That change is not yet a verified fix.** No video
-render was submitted for this project while its prompt remained pending.
+**Resolved 2026-09-11.** The generic “The model returned an invalid prompt”
+message was never a model-quality problem. `response.output_text` concatenates
+**every** assistant message, and the model sometimes answers once before
+consulting the skill and again afterwards — so parsing received `{…}{…}` and
+threw a JSON syntax error. Retrieving the stored response (`store: true`, so it
+can be fetched by id) showed two `message` items of 4409 and 4525 characters,
+failing at position 4409, exactly where the second object began. Reading only the
+final assistant message fixed it; clips 1 and 2 both recompiled cleanly.
 
-Next diagnostic action: instrument parsing immediately around
-`parseDirectorOutput(response.output_text, input)` in `src/lib/server/director.ts`.
-Distinguish JSON syntax errors, Zod field/type/length issues, refusal, empty output,
-and H3 semantic validation. Record response ID/status and safe issue codes/paths;
-do not log whole input bodies, image data, secrets or private story text. Existing
-development-only API error logging covers provider errors but **does not yet
-explain the parser failure**. Do not just repeat paid requests without collecting
-the missing diagnostic. If necessary, retrieve the stored response using its ID
-through the server SDK, keeping private output out of committed artifacts.
+That intermittency is the lesson: whether the model emits a pre-tool message
+varies per run, so the same input passed in isolation and failed in the app.
+
+A development-only diagnostic remains in `runDirector`, separating JSON syntax,
+schema and H3 semantic failures and recording issue paths and codes but never
+output text or story data. Keep it. If a revision ever silently produces no
+change again, `askDirector` also logs whether the result was discarded by the
+abort guard or returned unchanged by `applyCompiledClip` — a case observed once
+and never reproduced.
 
 ### 4. Brief change request
 
