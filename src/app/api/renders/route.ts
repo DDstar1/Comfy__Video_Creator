@@ -92,6 +92,14 @@ function runpod() {
   return { key, endpoint };
 }
 
+class RunpodRequestError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
 async function runpodRequest(url: string, key: string, init?: RequestInit) {
   const response = await fetch(url, {
     ...init,
@@ -104,7 +112,8 @@ async function runpodRequest(url: string, key: string, init?: RequestInit) {
   });
   const result = await response.json().catch(() => ({}));
   if (!response.ok)
-    throw new Error(
+    throw new RunpodRequestError(
+      response.status,
       typeof result.error === "string"
         ? result.error
         : `RunPod request failed (${response.status}).`,
@@ -163,12 +172,14 @@ export async function POST(request: Request) {
       if (row.id === input.clipId) break;
     }
 
+    const cacheNamespace = `${user.id}:${input.projectId}:${chainIndex}`;
     const { data: job, error: jobError } = await client
       .from(JOBS)
       .insert({
         project_id: input.projectId,
         clip_id: input.clipId,
         owner_id: user.id,
+        cache_namespace: cacheNamespace,
       })
       .select("id")
       .single();
@@ -206,7 +217,7 @@ export async function POST(request: Request) {
             input: {
               workflow: input.workflow,
               images: input.images ?? [],
-              cache_namespace: `${user.id}:${input.projectId}:${chainIndex}`,
+              cache_namespace: cacheNamespace,
             },
           }),
         },
@@ -305,10 +316,48 @@ export async function GET(request: Request) {
     if (!job.runpod_job_id) return Response.json(job);
 
     const { key, endpoint } = runpod();
-    const result = await runpodRequest(
-      `https://api.runpod.ai/v2/${endpoint}/status/${encodeURIComponent(job.runpod_job_id)}`,
-      key,
-    );
+    let result: Record<string, unknown>;
+    try {
+      result = await runpodRequest(
+        `https://api.runpod.ai/v2/${endpoint}/status/${encodeURIComponent(job.runpod_job_id)}`,
+        key,
+      );
+    } catch (statusError) {
+      // A finished job's own /status result is only kept for a limited window
+      // (observed ~30 minutes) -- past that this 404s even though the job
+      // genuinely completed. The video survives on the Network Volume as an
+      // ordinary side effect of the Extender's disk cache, independent of that
+      // window, so recover it there instead of treating this render as lost.
+      // Swap in a fresh runpod_job_id and let the normal poll loop pick it up;
+      // if the volume copy is also gone, that job fails fast on its own and
+      // falls through to the ordinary failure path below.
+      if (statusError instanceof RunpodRequestError && statusError.status === 404 && job.cache_namespace) {
+        try {
+          const fetchJob = await runpodRequest(
+            `https://api.runpod.ai/v2/${endpoint}/run`,
+            key,
+            {
+              method: "POST",
+              body: JSON.stringify({
+                input: { fetch: { cache_namespace: job.cache_namespace } },
+              }),
+            },
+          );
+          const recoveryId = typeof fetchJob.id === "string" ? fetchJob.id : "";
+          if (recoveryId) {
+            await client
+              .from(JOBS)
+              .update({ runpod_job_id: recoveryId, updated_at: new Date().toISOString() })
+              .eq("id", job.id);
+            return Response.json({ ...job, runpod_job_id: recoveryId, status: "queued" });
+          }
+        } catch {
+          // Recovery submission itself failed; fall through to the ordinary
+          // failure path with the original expiry error below.
+        }
+      }
+      throw statusError;
+    }
     const remote = String(result.status ?? "").toUpperCase();
     if (remote === "IN_QUEUE" || remote === "IN_PROGRESS") {
       const status = remote === "IN_QUEUE" ? "queued" : "running";
