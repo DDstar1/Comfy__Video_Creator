@@ -7,6 +7,15 @@ for the interface design.
 
 ## Status
 
+### Owner analytics - 2026-09-13
+
+Added `/admin`: owner-only user rankings, generation history, provider cost
+estimates, reliability, deposits and partial contribution. See
+[admin setup and accounting limitations](docs/ADMIN_ANALYTICS.md) for the
+required migration, server-only usage key and configurable pricing. True net
+profit is not claimed while expenses are missing. The analytics migration was
+applied to the linked Supabase project on 2026-09-13.
+
 ### Latest local changes — 2026-09-12
 
 Historical push statements below do not include a verified deployment of these
@@ -231,7 +240,7 @@ RUNPOD_S3_STORAGE_ACCESS_KEY=YOUR_RUNPOD_S3_ACCESS_KEY
 RUNPOD_S3_STORAGE_API_KEY=YOUR_RUNPOD_S3_SECRET_KEY
 RUNPOD_S3_VOLUME_ID=0oaqjjkos5
 RUNPOD_S3_REGION=EU-RO-1
-SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVER_ONLY_SERVICE_ROLE_KEY
+SUPABASE_SERVICE_KEY=YOUR_SERVER_ONLY_SERVICE_KEY
 CREEM_API_KEY=YOUR_CREEM_API_KEY
 CREEM_WEBHOOK_SECRET=YOUR_CREEM_WEBHOOK_SECRET
 CREEM_WALLET_PRODUCT_ID=YOUR_ONE_TIME_PRODUCT_ID

@@ -1,0 +1,42 @@
+.admin { min-height: 100vh; background: #f6f7f8; color: #23272b; padding: 24px 4%; font-size: 14px; letter-spacing: 0; }
+.header, .heading, .controls, .tabs, .reliability, .pagination { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.header { justify-content: space-between; border-bottom: 1px solid #d7dcdf; padding-bottom: 20px; }
+.header a, .header span { display: inline-flex; align-items: center; gap: 8px; }
+.heading { justify-content: space-between; margin: 28px 0 22px; }
+.admin h1 { font-family: inherit; font-size: 26px; letter-spacing: 0; margin: 0; }
+.admin h2 { font-family: inherit; font-size: 19px; margin: 0 0 20px; }
+.admin h3 { font-family: inherit; font-size: 15px; }
+.admin section { padding: 24px 0; border-bottom: 1px solid #d7dcdf; }
+.admin button, .admin input, .admin select { min-height: 44px; border: 1px solid #b9c3c9; border-radius: 5px; background: white; padding: 8px 12px; color: inherit; font: inherit; max-width: 100%; }
+.admin button { cursor: pointer; }
+.admin button:disabled { opacity: .45; cursor: default; }
+.admin :focus-visible { outline: 2px solid #14746b; outline-offset: 3px; }
+.controls label { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tabs { border-bottom: 1px solid #b9c3c9; }
+.tabs button { border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: transparent; text-transform: capitalize; }
+.tabs button[aria-current] { border-color: #14746b; color: #115c54; font-weight: 600; }
+.warning { background: #fff2df; border-left: 3px solid #996212; color: #644617; padding: 12px 16px; line-height: 1.6; margin: 16px 0; }
+.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 28px 20px; }
+.metrics span { color: #59616a; display: block; margin-bottom: 10px; }
+.metrics strong { font-size: 24px; font-weight: 600; overflow-wrap: anywhere; }
+.reliability { gap: 20px 32px; }
+.reliability strong { display: block; margin-top: 6px; }
+.chart { display: flex; align-items: end; height: 170px; gap: 12px; margin-top: 30px; overflow-x: auto; padding: 16px 0 32px; }
+.chart > div { position: relative; height: 100%; min-width: 34px; flex: 1; display: flex; align-items: end; }
+.chart span { display: block; background: #30867f; width: 100%; }
+.chart small { position: absolute; bottom: -22px; font-size: 11px; white-space: nowrap; }
+.chart b { position: absolute; top: -17px; font-size: 11px; }
+.tableWrap { overflow-x: auto; margin-top: 20px; }
+.admin table { border-collapse: collapse; width: 100%; min-width: 1040px; text-align: left; }
+.admin th { color: #59616a; font-size: 12px; white-space: nowrap; background: #edf0f1; }
+.admin th, .admin td { padding: 13px 12px; border-bottom: 1px solid #dce1e4; }
+.admin td { max-width: 260px; overflow-wrap: anywhere; }
+.admin td small { display: block; color: #59616a; font-size: 11px; margin-top: 4px; }
+.admin tr:hover td { background: #edf4f3; }
+.admin .userLink { border: 0; background: transparent; padding: 0; text-align: left; color: #116e65; }
+.status { display: inline-block; padding: 4px 7px; border-radius: 4px; background: #e6e9ed; font-size: 12px; white-space: nowrap; }
+.status[data-status='completed'] { background: #daeee4; color: #205a40; }
+.status[data-status='failed'], .status[data-status='cancelled'] { background: #f7dfdf; color: #8d3131; }
+.pagination { justify-content: flex-end; margin-top: 20px; }
+.footer { color: #59616a; padding: 24px 0; font-size: 12px; }
+@media (max-width: 760px) { .admin { padding: 16px; } .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .heading { align-items: flex-start; } .admin h1 { font-size: 23px; } .controls { width: 100%; } .controls label { max-width: 100%; } .metrics strong { font-size: 21px; } }

@@ -618,7 +618,16 @@
 .spin {
   animation: spin 1s linear infinite;
 }
+.policyLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  font-size: 13px;
+}
+.policyLinks a { text-decoration: underline; text-underline-offset: 4px; }
+.policyLinks a:focus-visible { outline: 2px solid var(--green); outline-offset: 4px; }
 .footer {
+  flex-wrap: wrap;
   min-height: 110px;
   padding: 25px max(32px, calc((100vw - 1176px) / 2));
   display: flex;

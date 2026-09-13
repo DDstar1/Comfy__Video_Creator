@@ -3,6 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { authenticatedClient } from "@/lib/server/render-auth";
 import { recordAcceptedRender } from "@/lib/server/render-submission";
 import { hasUnlimitedGeneration } from "@/lib/server/billing-access";
+import { recordUsage } from "@/lib/server/generation-usage";
+import { configuredRate } from "@/lib/admin-analytics";
 import { getVolumeObject, listChainSegments } from "@/lib/server/runpod-volume";
 import { dimensions } from "@/lib/render-workflow";
 import type { Project } from "@/lib/studio-model";
@@ -509,6 +511,16 @@ export async function GET(request: Request) {
         .eq("id", job.id);
       return Response.json({ ...job, status });
     }
+    const reportedRuntime = Number(result.executionTime ?? result.execution_time);
+    const rate = configuredRate(process.env.RUNPOD_GPU_RATE_CENTS_PER_HOUR);
+    await recordUsage({ id: job.id, external_id: job.id, owner_id: job.owner_id,
+      project_id: job.project_id, provider: 'runpod', action: 'render',
+      status: remote === 'COMPLETED' ? 'completed' : 'failed',
+      created_at: job.created_at, completed_at: new Date().toISOString(),
+      runtime_ms: Number.isFinite(reportedRuntime) && reportedRuntime >= 0 ? reportedRuntime : null,
+      estimated_cost_cents: rate !== null && Number.isFinite(reportedRuntime) && reportedRuntime >= 0 ? reportedRuntime / 3_600_000 * rate : null,
+      rate_snapshot: { cents_per_hour: rate, excludes_idle_and_storage: true },
+    });
     if (remote !== "COMPLETED") {
       const message =
         typeof result.error === "string"

@@ -932,6 +932,7 @@ function Workspace({
             )}
           </div>
           <div className="topbar-actions">
+            {wallet.unlimited && <a href="/admin" className="wallet-pill">Admin</a>}
             <span className="save-indicator">
               <span />
               {saveError

@@ -117,7 +117,7 @@ export function createDirectorClient() {
   });
 }
 
-export async function runDirector(input: DirectorInput, signal?: AbortSignal) {
+export async function runDirector(input: DirectorInput, signal?: AbortSignal, onResponse?: (response: OpenAI.Responses.Response) => Promise<void>) {
   checkDirectorInput(input);
   const skillId = process.env.OPENAI_DIRECTOR_SKILL_ID;
   const version = Number(process.env.OPENAI_DIRECTOR_SKILL_VERSION);
@@ -179,6 +179,7 @@ export async function runDirector(input: DirectorInput, signal?: AbortSignal) {
     },
     { signal },
   );
+  await onResponse?.(response);
   if (response.status !== "completed")
     throw new Error("The model did not complete the prompt. Please retry.");
   const usedSkill = response.output.some((item) => item.type === "shell_call");

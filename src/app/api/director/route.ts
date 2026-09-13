@@ -6,6 +6,7 @@ import {
   checkDirectorInput,
 } from "@/lib/director-contract";
 import { runDirector } from "@/lib/server/director";
+import { openAIUsage, recordUsage } from "@/lib/server/generation-usage";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
     process.env.NODE_ENV === "development" &&
     ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
   let owner = "local-development";
-  if (!local) {
+  if (!local || request.headers.has("authorization")) {
     const token = request.headers.get("authorization")?.replace(/^Bearer /, "");
     if (
       !token ||
@@ -96,9 +97,19 @@ export async function POST(request: Request) {
   recent.set(owner, Date.now());
   for (const [id, time] of recent)
     if (Date.now() - time > 60000) recent.delete(id);
+  const usageId = crypto.randomUUID();
+  const usageRow: Record<string, unknown> = { id: usageId, owner_id: owner === 'local-development' ? null : owner,
+    project_id: input.project.id, provider: 'openai', action: input.action };
+  await recordUsage({ ...usageRow, status: 'started' });
   try {
-    return Response.json(await runDirector(input, request.signal));
+    const output = await runDirector(input, request.signal, async response => {
+      Object.assign(usageRow, openAIUsage(response));
+      await recordUsage({ ...usageRow, status: 'started' });
+    });
+    await recordUsage({ ...usageRow, status: 'completed', completed_at: new Date().toISOString() });
+    return Response.json(output);
   } catch (error) {
+    await recordUsage({ ...usageRow, status: 'failed', completed_at: new Date().toISOString() });
     if (error instanceof OpenAI.APIError) {
       if (process.env.NODE_ENV === "development") {
         console.error("Director provider failure", {

@@ -12,6 +12,7 @@ import Waitlist from "@/components/waitlist";
 import LandingAuthButton from "@/components/landing-auth-button";
 import LandingNav from "@/components/landing-nav";
 import styles from "./landing.module.css";
+import Link from "next/link";
 
 const steps = [
   [
@@ -256,6 +257,11 @@ export default function Home() {
           <span className={styles.brandMark}>C</span>Clip<span>Weave</span>
         </div>
         <p>Stories deserve to move.</p>
+        <nav className={styles.policyLinks} aria-label="Policies">
+          <Link href="/privacy">Privacy Policy</Link>
+          <Link href="/terms">Terms of Service</Link>
+          <Link href="/acceptable-use">Acceptable Use Policy</Link>
+        </nav>
         <LandingAuthButton mode="signin">
           Creator sign in <ArrowRight size={15} />
         </LandingAuthButton>
