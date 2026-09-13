@@ -1480,7 +1480,10 @@ function Workspace({
                 <span>
                   <Leaf size={14} /> Made for the stories only you can tell.
                 </span>
-                <span>ClipWeave Studio</span>
+                <span>
+                  ClipWeave is operated by DTECH SOFTWARE LAB ENTERPRISE, a
+                  business registered in Nigeria.
+                </span>
               </footer>
             </>
           ) : route.view === "studio" ? (
@@ -2132,6 +2135,7 @@ function WalletDialog({ unlimited, balanceCents, reservedCents, onClose, onRefre
     </div>
     <label className="field">Amount to add (USD)<input type="number" min="5" max="1000" step="1" value={amount} onChange={(event) => setAmount(event.target.value)} /></label>
     <p className="small muted">The minimum top-up is $5. Each completed render costs its RunPod compute time plus a $0.30 ClipWeave fee. Failed jobs return their full reservation.</p>
+    <p className="small muted">Payments for ClipWeave services are collected by DTECH SOFTWARE LAB ENTERPRISE, the registered Nigerian business that operates ClipWeave. Wallet credit is non-transferable, cannot be withdrawn as cash, and may only be used for ClipWeave services.</p>
     {error && <p className="form-error" role="alert">{error}</p>}
     <div className="modal-footer"><button className="button secondary" onClick={() => void onRefresh()}>Refresh balance</button><button className="button primary" disabled={busy || Number(amount) < 5} onClick={checkout}><CreditCard size={16} /> {busy ? "Opening…" : "Add funds"}</button></div>
   </Modal>;

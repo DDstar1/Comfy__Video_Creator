@@ -220,6 +220,15 @@ reserves $0.59, then settles the RunPod runtime at the configured hourly rate pl
 a $0.30 margin. Submission, generation and video-ingestion failures refund the
 reservation automatically.
 
+## Legal identity
+
+ClipWeave is a product operated by **DTECH SOFTWARE LAB ENTERPRISE**, a business
+registered in Nigeria. Customer-facing pages and payment surfaces must preserve
+this relationship: ClipWeave is the product brand, while DTECH SOFTWARE LAB
+ENTERPRISE is the legal business receiving payment and providing the service.
+ClipWeave wallet credit is non-transferable, cannot be withdrawn as cash and may
+only be used for ClipWeave services.
+
 ## Setup
 
 Use Node.js 22.18 or newer. Run commands from this folder:

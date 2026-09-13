@@ -636,9 +636,19 @@
   background: #111812;
   color: white;
 }
-.footer p {
-  color: #9da69d;
+.footerCopy {
   flex: 1;
+}
+.footerCopy p {
+  color: #9da69d;
+}
+.footerCopy small {
+  display: block;
+  max-width: 620px;
+  margin-top: 5px;
+  color: #788178;
+  font-size: 10px;
+  line-height: 1.5;
 }
 .footer a {
   display: flex;

@@ -33,9 +33,13 @@ export default function PolicyPage({
             For support, privacy requests, or abuse reports, email{" "}
             <a href="mailto:support@clipweave.xyz">support@clipweave.xyz</a>.
           </p>
+          <p>
+            ClipWeave is a product operated by DTECH SOFTWARE LAB ENTERPRISE,
+            a business registered in Nigeria.
+          </p>
           <p className={styles.placeholder}>
-            [PLACEHOLDER: Company legal name and registered address, if
-            operating as a registered entity.]
+            [PLACEHOLDER: Add the registered business address before these
+            policies are treated as final.]
           </p>
         </section>
       </main>

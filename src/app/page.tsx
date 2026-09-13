@@ -256,7 +256,13 @@ export default function Home() {
         <div className={styles.brand}>
           <span className={styles.brandMark}>C</span>Clip<span>Weave</span>
         </div>
-        <p>Stories deserve to move.</p>
+        <div className={styles.footerCopy}>
+          <p>Stories deserve to move.</p>
+          <small>
+            ClipWeave is a product operated by DTECH SOFTWARE LAB ENTERPRISE,
+            a business registered in Nigeria.
+          </small>
+        </div>
         <nav className={styles.policyLinks} aria-label="Policies">
           <Link href="/privacy">Privacy Policy</Link>
           <Link href="/terms">Terms of Service</Link>
