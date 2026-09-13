@@ -11,7 +11,7 @@ const TEXT_ENCODER = "qwen3vl_32b_minimax_h3_int8_convrot.safetensors";
 const VIDEO_VAE = "minimax_h3_video_vae_fp16.safetensors";
 const AUDIO_VAE = "minimax_h3_audio_vae_fp32.safetensors";
 const TURBO_LORA =
-  "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors";
+  "minimax_h3_ref2v_turbo_8step_v1.0_768p_bf16.safetensors";
 
 export function dimensions(ratio: Project["ratio"], quality: Project["quality"] = "draft"): [number, number] {
   if (quality !== "draft") {
@@ -139,7 +139,7 @@ export async function assembleH3Workflow(
       width,
       height,
       ref_image_size: "match",
-      steps: 4,
+      steps: 8,
       sampler_name: "euler",
       scheduler: "simple",
       denoise: 1,

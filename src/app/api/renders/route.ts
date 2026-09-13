@@ -68,7 +68,7 @@ function assertClipWeaveWorkflow(
   if (
     !extender?.inputs ||
     extender.inputs.run_mode !== "clip_by_clip" ||
-    extender.inputs.steps !== 4 ||
+    extender.inputs.steps !== 8 ||
     extender.inputs.resolution_mode !== "manual" ||
     !output?.inputs ||
     output.inputs.output_directory !== "" ||
