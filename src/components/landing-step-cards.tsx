@@ -12,10 +12,10 @@ import {
 import styles from "@/app/landing.module.css";
 
 const steps = [
-  [BookOpenText, "Bring your story", "Paste a scene from your book or describe the video in your head."],
+  [BookOpenText, "Bring your story", "Paste a scene, a script, or the simple idea you have in your head."],
   [ImagePlus, "Add your references", "Upload characters, places and objects once, then mention them by name."],
-  [Sparkles, "Shape every clip", "Review simple descriptions while ClipWeave prepares the technical video workflow."],
-  [Clapperboard, "Approve and continue", "Verify each clip before the next one begins, so the story carries forward smoothly."],
+  [Sparkles, "Director shapes the clips", "ClipWeave Director turns your words into clear, actionable clips and handles the technical prompts."],
+  [Clapperboard, "Approve and receive", "Review each clip, then receive your approved story as one merged cinematic video."],
 ] as const;
 
 type StepCardProps = {

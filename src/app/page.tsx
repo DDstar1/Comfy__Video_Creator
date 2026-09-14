@@ -28,9 +28,10 @@ export default function Home() {
             Turn your story into a <em>3-minute cinematic video.</em>
           </h1>
           <p className={styles.lede}>
-            Bring a book scene, script or simple idea. ClipWeave helps you plan
-            every shot, keep your characters consistent and generate the
-            finished story.
+            You do not need to write or polish video prompts. Give ClipWeave
+            Director an idea, a scene or a script; it turns your words into
+            actionable clips, then merges your approved clips into a finished
+            film.
           </p>
           <div className={styles.heroOffer}>
             <div>
@@ -121,6 +122,11 @@ export default function Home() {
             <br />
             The complicated workflow disappears.
           </h2>
+          <p className={styles.sectionCopy}>
+            ClipWeave Director handles the technical prompting. You bring your
+            own words, scenes, or script; it breaks them into clips you can
+            review, approve, and receive as one finished video.
+          </p>
         </div>
         <LandingStepCards />
       </section>

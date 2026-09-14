@@ -348,6 +348,13 @@
   line-height: 1.6;
   color: #6b746b;
 }
+.sectionCopy {
+  max-width: 365px;
+  margin: 0 0 6px 28px;
+  color: #687168;
+  font-size: 14px;
+  line-height: 1.7;
+}
 /* The cards layer over one another as the visitor scrolls through the process. */
 @media (min-width: 901px) {
   .stepGrid {
@@ -729,6 +736,9 @@
   }
   .sectionHeading h2 {
     margin-top: 20px;
+  }
+  .sectionCopy {
+    margin: 20px 0 0;
   }
   .waitlistSection {
     gap: 45px;
