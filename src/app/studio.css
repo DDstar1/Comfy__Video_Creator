@@ -1283,6 +1283,11 @@ img {
   color: #788769;
   margin-top: 17px;
 }
+.clip-settings-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .clip-settings-line label {
   display: flex;
   align-items: center;
@@ -1294,6 +1299,54 @@ img {
   border-radius: 4px;
   background: #fff;
   font-size: 10px;
+}
+.locked-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.locked-option select:disabled {
+  cursor: not-allowed;
+  color: #87927d;
+  background: #f3f5f0;
+  border-color: #e1e6da;
+  opacity: 1;
+}
+.option-lock-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.option-lock {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: #718064;
+  background: transparent;
+  cursor: pointer;
+}
+.option-lock:hover,
+.option-lock:focus-visible {
+  color: #405338;
+  background: #e8ede1;
+}
+.option-tooltip {
+  position: absolute;
+  z-index: 4;
+  right: 0;
+  bottom: calc(100% + 7px);
+  width: 190px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #263526;
+  color: #fff;
+  font-size: 10px;
+  line-height: 1.4;
+  box-shadow: 0 6px 18px rgba(25, 35, 22, 0.18);
 }
 .clip-settings-line > span {
   margin-left: auto;
@@ -2870,6 +2923,51 @@ hr {
   }
 }
 @media (max-width: 720px) {
+  .editor-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .editor-footer > div:first-child,
+  .editor-footer-actions {
+    width: 100%;
+  }
+  .editor-footer > div:first-child .small {
+    max-width: none;
+    width: 100%;
+  }
+  .editor-footer-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    flex-wrap: nowrap;
+  }
+  .editor-footer-actions .button {
+    min-width: 0;
+    justify-content: center;
+  }
+  .clips-section > .section-heading {
+    margin-top: 28px;
+    margin-bottom: 28px;
+  }
+  .clip-settings-line {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .clip-settings-group {
+    display: grid;
+    grid-template-columns: 55px 160px;
+    align-items: center;
+    gap: 8px;
+  }
+  .clip-settings-group label {
+    min-width: 0;
+    width: 55px;
+  }
+  .clip-settings-group select {
+    width: 100%;
+    height: 36px;
+    min-height: 36px;
+  }
   /* Let the horizontal sequence reach both viewport edges while the editor
      below keeps the readable page gutter. */
   .clip-sequence {
@@ -3361,10 +3459,11 @@ hr {
   .create-banner > div:first-child {
     position: relative;
     z-index: 1;
-    max-width: 240px;
+    max-width: none;
   }
   .create-banner h2 {
-    font-size: 30px;
+    font-size: clamp(24px, 7.5vw, 30px);
+    white-space: nowrap;
   }
   .create-banner p {
     font-size: 12px;
@@ -3711,4 +3810,17 @@ hr {
 .project-card-settings:focus-visible {
   outline: 2px solid #fff;
   outline-offset: 2px;
+}
+
+/* Keep the two approved-clip actions in one equal-width row on narrow screens. */
+@media (max-width: 720px) {
+  .editor-footer .editor-footer-actions {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    width: 100% !important;
+  }
+  .editor-footer .editor-footer-actions > .button {
+    width: 100%;
+    min-width: 0;
+  }
 }

@@ -115,7 +115,7 @@ export default function Home() {
       </section>
 
       <section className={styles.how} id="how-it-works">
-        <div className={styles.sectionHeading}>
+        <div className={styles.sectionHeading} data-process-heading>
           <p className={styles.eyebrow}>
             <span /> From words to motion
           </p>

@@ -163,20 +163,53 @@ export function updateClip(
   const { status: _status, id: _id, ...editable } = patch;
   void _status;
   void _id;
+  const index = project.clips.findIndex((candidate) => candidate.id === id);
+  const { start, chain } = chainMembers(project.clips, index);
+  // A continuation inherits its render profile from the first clip in its chain.
+  if (editable.renderPreset && index !== start) delete editable.renderPreset;
+  const chainIds = chainIndexes(project.clips);
   return {
     ...project,
     updatedAt: new Date().toISOString(),
-    clips: project.clips.map((c) =>
-      c.id === id
-        ? {
-            ...c,
-            ...editable,
-            ...(patch.duration !== undefined || patch.referenceIds !== undefined
-              ? { continuityStale: true }
-              : {}),
-          }
-        : c,
-    ),
+    clips: project.clips.map((c, position) => {
+      if (c.id === id) {
+        return {
+          ...c,
+          ...editable,
+          ...(patch.duration !== undefined || patch.referenceIds !== undefined
+            ? { continuityStale: true }
+            : {}),
+        };
+      }
+      if (editable.renderPreset && chainIds[position] === chain) {
+        return { ...c, renderPreset: editable.renderPreset };
+      }
+      return c;
+    }),
+  };
+}
+
+/** Change whether a draft clip continues the previous one and give every
+ * resulting chain the render profile selected by its first clip. */
+export function setClipContinuity(
+  project: Project,
+  id: string,
+  continuesPrevious: boolean,
+): Project {
+  const index = project.clips.findIndex((clip) => clip.id === id);
+  if (index <= 0 || project.clips[index]?.status === "validated") return project;
+  const updated = project.clips.map((clip) =>
+    clip.id === id ? { ...clip, continuesPrevious } : clip,
+  );
+  const chains = chainIndexes(updated);
+  return {
+    ...project,
+    updatedAt: new Date().toISOString(),
+    clips: updated.map((clip, position) => {
+      const chainStart = chains.indexOf(chains[position]);
+      const renderPreset = updated[chainStart].renderPreset ?? "quick";
+      return clip.renderPreset === renderPreset ? clip : { ...clip, renderPreset };
+    }),
   };
 }
 /** Chain number for each clip. A clip that does not continue the previous one

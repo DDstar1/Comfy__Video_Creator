@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { assembleH3Workflow } from "../src/lib/render-workflow.ts";
-import { chainIndexes, chainMembers, validateClip } from "../src/lib/studio-model.ts";
+import { chainIndexes, chainMembers, setClipContinuity, updateClip, validateClip } from "../src/lib/studio-model.ts";
 
 function clip(id, extra = {}) {
   return {
@@ -105,4 +105,27 @@ test("validation still waits on an earlier clip inside the same chain", () => {
   ];
   const after = validateClip(project(clips), "b");
   assert.equal(after.clips[1].status, "ready");
+});
+
+
+test("continued clips inherit the first clip's render profile and cuts unlock a new profile", () => {
+  const initial = project([
+    clip("a", { renderPreset: "cinematic" }),
+    clip("b", { continuesPrevious: true, renderPreset: "quick" }),
+    clip("c", { continuesPrevious: true, renderPreset: "quick" }),
+  ]);
+  const joined = setClipContinuity(initial, "b", true);
+  assert.deepEqual(joined.clips.map((item) => item.renderPreset), [
+    "cinematic",
+    "cinematic",
+    "cinematic",
+  ]);
+
+  const cut = setClipContinuity(joined, "b", false);
+  const changed = updateClip(cut, "b", { renderPreset: "quick" });
+  assert.deepEqual(changed.clips.map((item) => item.renderPreset), [
+    "cinematic",
+    "quick",
+    "quick",
+  ]);
 });

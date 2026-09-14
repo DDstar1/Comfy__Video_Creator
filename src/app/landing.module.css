@@ -326,13 +326,23 @@
   color: var(--lime);
 }
 .how {
+  --step-heading-clearance: 320px;
   max-width: 1240px;
   margin: auto;
   padding: 105px 32px;
 }
 .sectionHeading {
   display: block;
-  margin-bottom: 50px;
+  position: sticky;
+  top: 16px;
+  z-index: 10;
+  margin-bottom: 0;
+  padding: 26px 24px;
+  border: 1px solid #dfe3d8;
+  border-radius: 18px;
+  background: rgb(247 243 232 / 96%);
+  box-shadow: 0 12px 28px rgb(42 55 39 / 7%);
+  backdrop-filter: blur(10px);
 }
 .sectionHeading h2,
 .featureCopy h2,
@@ -403,7 +413,7 @@
   }
   .stepCard {
     position: relative;
-    top: calc(30vh + (var(--card-index) * 28px));
+    top: calc(max(30vh, var(--step-heading-clearance)) + (var(--card-index) * 28px));
     min-height: 330px;
     width: min(75vw, 1100px);
     max-width: 1100px;
@@ -1168,6 +1178,9 @@
 }
 /* The stacked animation remains available on touch screens with smaller offsets. */
 @media (max-width: 900px) {
+  .how {
+    --step-heading-clearance: 280px;
+  }
   .stepGrid {
     display: block;
     padding-bottom: 0;
@@ -1183,7 +1196,7 @@
   }
   .stepCard {
     position: relative;
-    top: calc(30vh + (var(--card-index) * 18px));
+    top: calc(max(30vh, var(--step-heading-clearance)) + (var(--card-index) * 18px));
     width: 100%;
     min-height: 260px;
     margin: 0 auto;

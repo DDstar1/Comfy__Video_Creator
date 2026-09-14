@@ -198,11 +198,11 @@ export async function POST(request: Request) {
         break;
       }
     }
-    const preset = clip.render_preset === "quick" ? "quick" : "cinematic";
+    const preset = clip.render_preset === "cinematic" ? "cinematic" : "quick";
     if (targetPosition < 0)
       return Response.json({ error: "Clip is not in this project's render order." }, { status: 409 });
     if (ordered.slice(chainStart, targetPosition + 1).some(
-      (row) => (row.render_preset === "quick" ? "quick" : "cinematic") !== preset,
+      (row) => (row.render_preset === "cinematic" ? "cinematic" : "quick") !== preset,
     ))
       return Response.json(
         { error: "Continued clips must use one render profile. Regenerate this chain from its first clip to change it." },

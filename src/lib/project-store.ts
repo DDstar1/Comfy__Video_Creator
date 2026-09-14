@@ -64,8 +64,10 @@ export async function loadAccountProject(
   const assetsByClip = new Map<string, { id: string; clip_id: string; storage_path: string }>((assetsResult.data ?? []).map((asset: { id: string; clip_id: string; storage_path: string }) => [String(asset.clip_id), { id: String(asset.id), clip_id: String(asset.clip_id), storage_path: String(asset.storage_path) }]));
   const clipsByProject = new Map<string, Clip[]>();
   for (const row of (clipsResult.data ?? []) as Row[]) {
-    const videoStoragePath = row.video_url ? String(row.video_url) : "";
-    const signedVideo = videoStoragePath && !assetsByClip.has(String(row.id))
+    const asset = assetsByClip.get(String(row.id));
+    const isVolumeAsset = asset?.storage_path.startsWith("comfytr-cache/") ?? false;
+    const videoStoragePath = row.video_url ? String(row.video_url) : asset?.storage_path ?? "";
+    const signedVideo = videoStoragePath && !isVolumeAsset
       ? await client.storage
           .from(GENERATED_VIDEO_BUCKET)
           .createSignedUrl(videoStoragePath, 3600)
@@ -75,7 +77,7 @@ export async function loadAccountProject(
       title: String(row.title),
       description: String(row.description ?? ""),
       duration: Number(row.duration),
-      renderPreset: row.render_preset === "quick" ? "quick" : "cinematic",
+      renderPreset: row.render_preset === "cinematic" ? "cinematic" : "quick",
       referenceIds: (row.reference_ids as string[]) ?? [],
       suggestedReferences: (row.suggested_references as Clip["suggestedReferences"]) ?? [],
       status: row.status as Clip["status"],
@@ -84,7 +86,7 @@ export async function loadAccountProject(
       // the previous one, which is how the project already behaved.
       continuesPrevious: row.continues_previous !== false,
       ...(videoStoragePath ? { videoStoragePath } : {}),
-      ...(videoStoragePath.startsWith("comfytr-cache/") && assetsByClip.has(String(row.id)) ? { videoAssetId: assetsByClip.get(String(row.id))!.id } : {}),
+      ...(isVolumeAsset && asset ? { videoAssetId: asset.id } : {}),
       ...(signedVideo?.data?.signedUrl
         ? { videoUrl: signedVideo.data.signedUrl }
         : {}),
@@ -187,7 +189,7 @@ export async function saveAccountProject(
         title: clip.title,
         description: clip.description,
         duration: clip.duration,
-        render_preset: clip.renderPreset ?? "cinematic",
+        render_preset: clip.renderPreset ?? "quick",
         reference_ids: clip.referenceIds,
         suggested_references: clip.suggestedReferences ?? [],
         status: clip.status,

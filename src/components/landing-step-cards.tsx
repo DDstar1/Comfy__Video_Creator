@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, type CSSProperties } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { motion, useReducedMotion, useScroll, useTransform, type MotionValue } from "framer-motion";
 import {
   BookOpenText,
@@ -62,14 +62,37 @@ function StepCard({ Icon, title, copy, index, range, targetScale, progress, redu
 
 export default function LandingStepCards() {
   const section = useRef<HTMLDivElement>(null);
+  const [headingClearance, setHeadingClearance] = useState<number>();
   const { scrollYProgress } = useScroll({
     target: section,
     offset: ["start center", "end end"],
   });
   const reduceMotion = useReducedMotion();
 
+  useLayoutEffect(() => {
+    const heading = document.querySelector<HTMLElement>("[data-process-heading]");
+    if (!heading) return;
+
+    const updateClearance = () => {
+      setHeadingClearance(Math.ceil(heading.getBoundingClientRect().height) + 20);
+    };
+
+    updateClearance();
+    const observer = new ResizeObserver(updateClearance);
+    observer.observe(heading);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div className={styles.stepGrid} ref={section}>
+    <div
+      className={styles.stepGrid}
+      ref={section}
+      style={
+        headingClearance
+          ? ({ "--step-heading-clearance": `${headingClearance}px` } as CSSProperties)
+          : undefined
+      }
+    >
       {steps.map(([Icon, title, copy], index) => (
         <StepCard
           key={title}

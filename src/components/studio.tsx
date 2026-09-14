@@ -58,6 +58,7 @@ import {
   chainIndexes,
   chainMembers,
   createSampleProject,
+  setClipContinuity,
   duplicateProjectAsDraft,
   newClip,
   sampleReferences,
@@ -1501,6 +1502,11 @@ function Workspace({
                             onChange={(patch) =>
                               saveProject(updateClip(project, clip.id, patch))
                             }
+                            onChangeContinuity={() =>
+                              saveProject(
+                                setClipContinuity(project, clip.id, clip.continuesPrevious === false),
+                              )
+                            }
                             onMention={showMention}
                             onCompile={(patch) =>
                               void askDirector("revise", clip, patch)
@@ -2062,18 +2068,15 @@ function Workspace({
         </Modal>
       )}
       {dialog === "regenerate" && project && clip && (
-        <Modal title="Regenerate from this clip?" eyebrow="CONTINUITY RESET" onClose={() => setDialog(null)}>
+        <Modal title="Make a new version of this clip?" onClose={() => setDialog(null)}>
           <p className="modal-intro">
-            ClipWeave will remove this clip’s generated video and reset every later continued clip in this take to Draft.
-            The approved clips before it remain as the motion-context prefix for this render.
+            This will replace this clip’s video. Any clips after it will need to be made again, because they continue from this moment.
           </p>
-          <p className="small muted">
-            The regenerated chain uses the same render profile as its approved prefix. Stale video segments are removed from the RunPod Network Volume.
-          </p>
+          <p className="small muted">The clips before this one will stay unchanged.</p>
           <div className="modal-footer">
-            <button className="button secondary" onClick={() => setDialog(null)}>Keep current clips</button>
+            <button className="button secondary" onClick={() => setDialog(null)}>Go back</button>
             <button className="button danger" onClick={() => void regenerateClip(clip)}>
-              <Sparkles size={16} /> Reset and regenerate
+              <Sparkles size={16} /> Make new version
             </button>
           </div>
         </Modal>
@@ -2264,6 +2267,7 @@ function ClipEditor({
   clip,
   references,
   onChange,
+  onChangeContinuity,
   onMention,
   renderState,
   onGenerate,
@@ -2280,6 +2284,7 @@ function ClipEditor({
   clip: Clip;
   references: ReferenceImage[];
   onChange: (patch: Partial<Clip>) => void;
+  onChangeContinuity: () => void;
   onMention: (name: string) => void;
   renderState?: { jobId?: string; status: string; error?: string };
   onGenerate: () => void;
@@ -2299,6 +2304,7 @@ function ClipEditor({
   const [request, setRequest] = useState(clip.requestedChange ?? "");
   const [showReferences, setShowReferences] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [openLockHelp, setOpenLockHelp] = useState<"duration" | "render" | null>(null);
   const locked = clip.status === "validated";
   const rendering =
     !!renderState &&
@@ -2306,6 +2312,10 @@ function ClipEditor({
   const index = project.clips.findIndex((c) => c.id === clip.id);
   // The first clip always starts a chain; there is nothing before it to continue.
   const continues = index > 0 && clip.continuesPrevious !== false;
+  const { start: chainStart } = chainMembers(project.clips, index);
+  const isChainFollower = index > chainStart;
+  const canEditStory = !locked;
+  const chainRenderPreset = project.clips[chainStart]?.renderPreset ?? "quick";
   const usedRefs = references.filter((r) => clip.referenceIds.includes(r.id));
   const priorReady = project.clips
     .slice(chainMembers(project.clips, index).start, index)
@@ -2335,7 +2345,7 @@ function ClipEditor({
               onClick={() =>
                 locked
                   ? onNotice("Validated clips keep the timing they were approved with.")
-                  : onChange({ continuesPrevious: !continues })
+                  : onChangeContinuity()
               }
               aria-pressed={continues}
               title={
@@ -2356,7 +2366,7 @@ function ClipEditor({
                 ? "Revision pending"
                 : "Ready to shape"}
           </span>
-          {!locked && (
+          {canEditStory && (
             <button
               className="clip-remove"
               onClick={onRemove}
@@ -2394,7 +2404,7 @@ function ClipEditor({
       <div className="editor-body">
         <div className="description-heading">
           <label htmlFor="clip-description">The scene, in your words</label>
-          {!locked && (
+          {canEditStory && (
             <button
               className="text-button"
               onClick={() => {
@@ -2442,7 +2452,7 @@ function ClipEditor({
             />
           </p>
         )}
-        {!locked && !editing && (
+        {canEditStory && !editing && (
           <div className="pending-note">
             <span>
               {clip.continuityStale
@@ -2484,7 +2494,7 @@ function ClipEditor({
           <span>
             IN THIS CLIP <span>{usedRefs.length}/9</span>
           </span>
-          {!locked && (
+          {canEditStory && (
             <button
               className="text-button"
               onClick={() => setShowReferences(!showReferences)}
@@ -2516,7 +2526,7 @@ function ClipEditor({
               <div className="reference-missing" key={suggestion.name}>
                 <div><ImagePlus size={16} /><strong>{suggestion.name}</strong><span>Image needed</span></div>
                 <p>{suggestion.description}</p>
-                {!locked && <div className="suggestion-actions">
+                {canEditStory && <div className="suggestion-actions">
                   <button className="text-button" disabled={rendering} onClick={() => onUploadReference(suggestion)}><Upload size={15} /> Upload image</button>
                   <select aria-label={`Choose image for ${suggestion.name}`} value="" disabled={rendering}
                     onChange={(e) => {
@@ -2532,7 +2542,7 @@ function ClipEditor({
             ))}
           </div>
         )}
-        {showReferences && !locked && (
+        {showReferences && canEditStory && (
           <div className="clip-reference-picker">
             {references
               .filter((r) => project.referenceIds.includes(r.id))
@@ -2564,7 +2574,7 @@ function ClipEditor({
             )}
           </div>
         )}
-        {locked ? (
+        {!canEditStory ? (
           <div className="locked-note">
             <span>
               <LockKeyhole size={18} />
@@ -2572,7 +2582,7 @@ function ClipEditor({
             <div>
               <strong>This moment is part of your story.</strong>
               <p>
-                Its description, references, and settings are locked.
+                Make a new version to change its description, references, duration, or render quality.
                 {project.sample
                   ? " This example demonstrates the approved state; no video was generated."
                   : ""}
@@ -2609,36 +2619,86 @@ function ClipEditor({
             </div>
           </div>
         )}
-        {!locked && (
-          <div className="clip-settings-line">
+        <div className="clip-settings-line">
+          <div className="clip-settings-group">
             <label htmlFor="clip-duration">
               <Clock3 size={14} /> Duration
             </label>
-            <select
-              id="clip-duration"
-              value={clip.duration}
-              onChange={(e) => onChange({ duration: Number(e.target.value) })}
-            >
-              {[5, 10, 15].map((d) => (
-                <option key={d} value={d}>
-                  {d} seconds
-                </option>
-              ))}
-            </select>
+            <span className="locked-option">
+              <select
+                id="clip-duration"
+                value={clip.duration}
+                disabled={locked}
+                onChange={(e) => onChange({ duration: Number(e.target.value) })}
+              >
+                {[5, 10, 15].map((d) => (
+                  <option key={d} value={d}>
+                    {d} seconds
+                  </option>
+                ))}
+              </select>
+              {locked && (
+                <span className="option-lock-wrap">
+                  <button
+                    type="button"
+                    className="option-lock"
+                    aria-label="Why duration is locked"
+                    aria-expanded={openLockHelp === "duration"}
+                    onClick={() => setOpenLockHelp((current) => current === "duration" ? null : "duration")}
+                  >
+                    <LockKeyhole size={13} />
+                  </button>
+                  {openLockHelp === "duration" && (
+                    <span className="option-tooltip" role="tooltip">Regenerate this clip to change its duration.</span>
+                  )}
+                </span>
+              )}
+            </span>
+          </div>
+          <div className="clip-settings-group">
             <label htmlFor="clip-render-preset">
               <Sparkles size={14} /> Render
             </label>
-            <select
-              id="clip-render-preset"
-              value={clip.renderPreset ?? "cinematic"}
-              onChange={(e) => onChange({ renderPreset: e.target.value as "quick" | "cinematic" })}
-            >
+            <span className="locked-option">
+              <select
+                id="clip-render-preset"
+                value={chainRenderPreset}
+                disabled={locked || isChainFollower}
+                onChange={(e) => onChange({ renderPreset: e.target.value as "quick" | "cinematic" })}
+              >
               <option value="quick">Quick preview · 4-step</option>
-              <option value="cinematic">Cinematic detail · 8-step</option>
-            </select>
-            <span>Draft timing · checked before rendering</span>
+                <option value="cinematic">Cinematic detail · 8-step</option>
+              </select>
+              {(locked || isChainFollower) && (
+                <span className="option-lock-wrap">
+                  <button
+                    type="button"
+                    className="option-lock"
+                    aria-label={locked ? "Why render is locked" : "Why this render profile is inherited"}
+                    aria-expanded={openLockHelp === "render"}
+                    onClick={() => setOpenLockHelp((current) => current === "render" ? null : "render")}
+                  >
+                    <LockKeyhole size={13} />
+                  </button>
+                  {openLockHelp === "render" && (
+                    <span className="option-tooltip" role="tooltip">
+                      {locked
+                        ? "Regenerate this clip to change its render profile."
+                        : "This render profile comes from the first clip in this take."}
+                    </span>
+                  )}
+                </span>
+              )}
+            </span>
           </div>
-        )}
+          {isChainFollower ? (
+            <span>Set by the first clip in this take</span>
+          ) : locked ? (
+            <span>Regenerate to change settings</span>
+          ) : (
+            <span>Draft timing · checked before rendering</span>
+          )}
+        </div>
       </div>
       {renderState?.status === "failed" && renderState.error && (
         <p role="alert">Render status: {renderState.error}</p>

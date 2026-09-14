@@ -69,8 +69,8 @@ export async function assembleH3Workflow(
   // what makes one scene morph into the next instead of cutting to it.
   const { start: chainStart } = chainMembers(project.clips, targetIndex);
   const sequence = project.clips.slice(chainStart, targetIndex + 1);
-  const profile = target.renderPreset ?? "cinematic";
-  if (sequence.some((clip) => (clip.renderPreset ?? "cinematic") !== profile))
+  const profile = target.renderPreset ?? "quick";
+  if (sequence.some((clip) => (clip.renderPreset ?? "quick") !== profile))
     throw new Error("Continued clips must use one render profile. Regenerate this chain from its first clip to change it.");
   if (sequence.some((clip) => !clip.technicalPrompt?.trim()))
     throw new Error(
