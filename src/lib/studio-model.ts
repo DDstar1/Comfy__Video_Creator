@@ -14,11 +14,13 @@ export type Clip = {
   title: string;
   description: string;
   duration: number;
+  renderPreset?: "quick" | "cinematic";
   referenceIds: string[];
   status: "draft" | "ready" | "validated";
   image: string;
   videoUrl?: string;
   videoStoragePath?: string;
+  videoAssetId?: string;
   requestedChange?: string;
   pendingDescription?: string;
   technicalPrompt?: string;
@@ -40,8 +42,7 @@ export type Clip = {
     endState?: string;
     savedAt: string;
   }[];
-};
-export type Project = {
+};export type Project = {
   id: string;
   title: string;
   story: string;
@@ -239,6 +240,46 @@ export function newProject(title: string, story: string, settings: Pick<Project,
     referenceIds: [],
     clips: [],
     updatedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Starts a clean production pass from an existing plan. The original project
+ * remains untouched: approved clips and their rendered media stay available
+ * there for reference, while the copy has fresh clip ids and no render state.
+ */
+export function duplicateProjectAsDraft(project: Project): Project {
+  const now = new Date().toISOString();
+  return {
+    ...project,
+    id: crypto.randomUUID(),
+    title: `${project.title} — new version`,
+    sample: undefined,
+    updatedAt: now,
+    clips: project.clips.map((clip) => ({
+      id: crypto.randomUUID(),
+      title: clip.title,
+      description: clip.description,
+      duration: clip.duration,
+      referenceIds: [...clip.referenceIds],
+      suggestedReferences: clip.suggestedReferences
+        ? clip.suggestedReferences.map((reference) => ({ ...reference }))
+        : undefined,
+      status: "draft",
+      image: clip.image,
+      technicalPrompt: clip.technicalPrompt,
+      mode: clip.mode,
+      endState: clip.endState,
+      continuesPrevious: clip.continuesPrevious,
+      continuityStale: false,
+      revision: undefined,
+      videoUrl: undefined,
+      videoStoragePath: undefined,
+      requestedChange: undefined,
+      pendingDescription: undefined,
+      responseId: undefined,
+      promptHistory: undefined,
+    })),
   };
 }
 export function resolveSuggestedReference(project: Project, name: string, image?: ReferenceImage): Project {

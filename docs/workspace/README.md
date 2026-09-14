@@ -1,5 +1,21 @@
 # ClipWeave — book-to-video studio
 
+## Current product state — 2026-09-13
+
+This workspace handoff copy mirrors the root project state. ClipWeave now has
+direct project URLs, fixed-per-project quality/frame settings, suggested versus
+linked reference handling, chain-scoped rendering and validated-chain FFmpeg
+exports. The owner-only `/admin` dashboard is backed by the applied analytics
+migration, while net profit remains unavailable until all real operating costs
+are reconciled.
+
+The shared generated mark at
+[../../public/brand/clipweave-mark.png](../../public/brand/clipweave-mark.png)
+is used on landing, policy and Studio surfaces plus browser metadata. The current
+local check passed 39 tests, TypeScript, targeted ESLint and responsive browser
+loading without submitting a paid provider generation.
+
+
 ## Latest local state — 2026-09-12
 
 This checkpoint supersedes historical push/build statements below. The latest

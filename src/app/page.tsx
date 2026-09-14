@@ -1,8 +1,6 @@
 import {
   ArrowRight,
-  BookOpenText,
   Check,
-  Clapperboard,
   Globe2,
   ImagePlus,
   LockKeyhole,
@@ -11,31 +9,10 @@ import {
 import Waitlist from "@/components/waitlist";
 import LandingAuthButton from "@/components/landing-auth-button";
 import LandingNav from "@/components/landing-nav";
+import LandingStepCards from "@/components/landing-step-cards";
 import styles from "./landing.module.css";
+import Image from "next/image";
 import Link from "next/link";
-
-const steps = [
-  [
-    BookOpenText,
-    "Bring your story",
-    "Paste a scene from your book or describe the video in your head.",
-  ],
-  [
-    ImagePlus,
-    "Add your references",
-    "Upload characters, places and objects once, then mention them by name.",
-  ],
-  [
-    Sparkles,
-    "Shape every clip",
-    "Review simple descriptions while ClipWeave prepares the technical video workflow.",
-  ],
-  [
-    Clapperboard,
-    "Approve and continue",
-    "Verify each clip before the next one begins, so the story carries forward smoothly.",
-  ],
-] as const;
 
 export default function Home() {
   return (
@@ -136,18 +113,7 @@ export default function Home() {
             The complicated workflow disappears.
           </h2>
         </div>
-        <div className={styles.stepGrid}>
-          {steps.map(([Icon, title, copy], index) => (
-            <article key={title}>
-              <div className={styles.stepTop}>
-                <Icon size={23} />
-                <span>0{index + 1}</span>
-              </div>
-              <h3>{title}</h3>
-              <p>{copy}</p>
-            </article>
-          ))}
-        </div>
+        <LandingStepCards />
       </section>
 
       <section className={styles.feature}>
@@ -254,10 +220,10 @@ export default function Home() {
 
       <footer className={styles.footer}>
         <div className={styles.brand}>
-          <span className={styles.brandMark}>C</span>Clip<span>Weave</span>
+          <Image className={styles.brandMark} src="/brand/clipweave-mark.png" alt="" width={34} height={34} />Clip<span>Weave</span>
         </div>
         <div className={styles.footerCopy}>
-          <p>Stories deserve to move.</p>
+          <p>Stories deserve to move. ClipWeave is operated by DTECH SOFTWARE LAB ENTERPRISE.</p>
           <small>
             ClipWeave is a product operated by DTECH SOFTWARE LAB ENTERPRISE,
             a business registered in Nigeria.

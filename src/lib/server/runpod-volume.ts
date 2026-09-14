@@ -57,7 +57,7 @@ function encodeSegment(segment: string) {
 
 /** SigV4-sign one request against the volume's S3-compatible API and send it. */
 async function signedRequest(
-  method: "GET",
+  method: "GET" | "DELETE",
   objectKey: string,
   query: Record<string, string> = {},
 ) {
@@ -154,4 +154,45 @@ export async function getVolumeObject(key: string): Promise<Uint8Array> {
   if (!response.ok)
     throw new Error(`Volume read failed (${response.status}) for ${key}`);
   return new Uint8Array(await response.arrayBuffer());
+}
+
+/** Delete every durable cache object for one trusted project chain. */
+export async function deleteChainCache(cacheNamespace: string) {
+  const digest = chainDigest(cacheNamespace);
+  const prefix = `comfytr-cache/${digest.slice(0, 2)}/${digest}/`;
+  const listed = await signedRequest("GET", "", {
+    "list-type": "2",
+    "max-keys": "1000",
+    prefix,
+  });
+  if (listed.status === 404) return 0;
+  const body = await listed.text();
+  if (!listed.ok)
+    throw new Error(`Volume listing failed (${listed.status}): ${body.slice(0, 200)}`);
+  const keys = [...body.matchAll(/<Key>([^<]*)<\/Key>/g)]
+    .map((match) => match[1])
+    .filter((key) => key.startsWith(prefix));
+  for (const key of keys) {
+    const deleted = await signedRequest("DELETE", key);
+    if (!deleted.ok && deleted.status !== 404)
+      throw new Error(`Volume deletion failed (${deleted.status}) for project cache.`);
+  }
+  return keys.length;
+}
+
+/** Remove rendered segments from this position onward while preserving earlier motion context. */
+export async function truncateChainVideos(cacheNamespace: string, fromSegment: number) {
+  if (!Number.isInteger(fromSegment) || fromSegment < 0)
+    throw new Error("A non-negative segment position is required.");
+  const segments = await listChainSegments(cacheNamespace);
+  const stale = segments.filter((key) => {
+    const match = /ref2va_(\d+)\./.exec(key);
+    return match ? Number(match[1]) - 1 >= fromSegment : false;
+  });
+  for (const key of stale) {
+    const deleted = await signedRequest("DELETE", key);
+    if (!deleted.ok && deleted.status !== 404)
+      throw new Error("Volume deletion failed for a stale chain video.");
+  }
+  return stale.length;
 }

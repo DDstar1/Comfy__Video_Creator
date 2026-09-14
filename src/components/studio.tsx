@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowDownToLine,
@@ -14,6 +16,7 @@ import {
   ChevronRight,
   CircleHelp,
   Clapperboard,
+  Copy,
   Clock3,
   CreditCard,
   ExternalLink,
@@ -30,6 +33,7 @@ import {
   Menu,
   Link2,
   Plus,
+  Play,
   Scissors,
   Trash2,
   Search,
@@ -54,6 +58,7 @@ import {
   chainIndexes,
   chainMembers,
   createSampleProject,
+  duplicateProjectAsDraft,
   newClip,
   sampleReferences,
   resolveSuggestedReference,
@@ -72,7 +77,7 @@ import { ProjectMerge } from "./project-merge";
 
 type Tab = "story" | "references" | "clips";
 type Dialog =
-  "new" | "auth" | "upload" | "help" | "settings" | "validate" | "wallet" | null;
+  "new" | "auth" | "upload" | "help" | "settings" | "account" | "validate" | "regenerate" | "wallet" | "delete" | null;
 type Route = StudioRoute;
 
 export default function Studio({ initialRoute = { view: "projects" } }: { initialRoute?: Route }) {
@@ -130,6 +135,7 @@ function Workspace({
   const [references, setReferences] =
     useState<ReferenceImage[]>(sampleReferences);
   const [dialog, setDialog] = useState<Dialog>(null);
+  const [quickSettingsProject, setQuickSettingsProject] = useState<Project | null>(null);
   const [renders, setRenders] = useState<
     Record<string, { jobId?: string; status: string; error?: string }>
   >({});
@@ -149,6 +155,7 @@ function Workspace({
   const [notice, setNotice] = useState("");
   const [saveError, setSaveError] = useState("");
   const [validationBusy, setValidationBusy] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [libraryError, setLibraryError] = useState("");
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [ready, setReady] = useState(false);
@@ -373,6 +380,7 @@ function Workspace({
 
   const project = projects.find((p) => p.id === route.projectId &&
     (p.sample || loadedProjectId === route.projectId));
+  const settingsProject = project ?? quickSettingsProject;
   const clip =
     project?.clips.find((c) => c.id === clipId) ??
     project?.clips.find((c) => c.status !== "validated") ??
@@ -454,6 +462,7 @@ function Workspace({
                               status: "ready" as const,
                               videoUrl: result.videoUrl,
                               videoStoragePath: result.videoStoragePath,
+                              videoAssetId: result.videoAssetId,
                             }
                           : candidate,
                       ),
@@ -681,11 +690,51 @@ function Workspace({
     }
   }
   function openProject(p: ProjectSummary) {
-    navigate({
-      view: "studio",
-      projectId: p.id,
-      tab: "clips",
-    });
+    navigate({ view: "studio", projectId: p.id, tab: "clips" });
+  }
+  async function regenerateClip(target: Clip) {
+    if (!project || !user || !supabase) return;
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) throw new Error("Sign in again before regenerating.");
+      const response = await fetch("/api/clips/regenerate", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + data.session.access_token, "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: project.id, clipId: target.id }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error ?? "Clip regeneration could not be prepared.");
+      const loaded = await loadAccountProject(supabase, user.id, project.id);
+      const refreshed = loaded.find((item) => item.id === project.id);
+      if (!refreshed) throw new Error("The regenerated project could not be reloaded.");
+      persisted.current.set(refreshed.id, refreshed);
+      saveProject(refreshed);
+      setRenders((current) => {
+        const next = { ...current };
+        for (const id of result.resetClipIds ?? []) delete next[id];
+        return next;
+      });
+      setClipId(target.id);
+      setDialog(null);
+      notify(result.retainedMotionPrefix
+        ? "Later clips were reset. This clip keeps the approved motion context before it."
+        : "This chain was reset from its first clip.");
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Clip regeneration could not be prepared.");
+    }
+  }
+  async function openQuickSettings(p: ProjectSummary) {
+    if (!user || !supabase) return;
+    try {
+      const loaded = await loadAccountProject(supabase, user.id, p.id);
+      const target = loaded.find((item) => item.id === p.id);
+      if (!target) throw new Error("Project details could not be loaded.");
+      setProjects((current) => [target, ...current.filter((item) => item.id !== target.id)]);
+      setQuickSettingsProject(target);
+      setDialog("settings");
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Project settings could not be opened.");
+    }
   }
   function createProject(p: Project) {
     setProjects((prev) => [p, ...prev]);
@@ -693,7 +742,42 @@ function Workspace({
     navigate({ view: "studio", projectId: p.id, tab: "story" });
     notify("Project created. Your project is saved to your account.");
   }
-  function addClip() {
+  function duplicateProject(source = settingsProject, openAfter = true) {
+    if (!source) return;
+    const duplicate = duplicateProjectAsDraft(source);
+    setProjects((prev) => [duplicate, ...prev]);
+    setClipId(duplicate.clips[0]?.id ?? "");
+    if (openAfter) navigate({ view: "studio", projectId: duplicate.id, tab: "clips" });
+    else setQuickSettingsProject(duplicate);
+    notify("New project version created. All clips are fresh drafts with no generated video.");
+  }
+  async function deleteProject() {
+    const target = settingsProject;
+    if (!target || !user || !supabase) return;
+    setDeleteBusy(true);
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) throw new Error("Sign in again before deleting this project.");
+      const response = await fetch("/api/projects", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${data.session.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: target.id }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(typeof result.error === "string" ? result.error : "Project deletion failed.");
+      persisted.current.delete(target.id);
+      setProjects((current) => current.filter((item) => item.id !== target.id));
+      setSummaries((current) => current.filter((item) => item.id !== target.id));
+      setQuickSettingsProject(null);
+      setDialog(null);
+      if (route.view === "studio" && project?.id === target.id) navigate({ view: "projects" });
+      notify("Project, generated videos, and RunPod cache deleted.");
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Project deletion failed.");
+    } finally {
+      setDeleteBusy(false);
+    }
+  }  function addClip() {
     if (!project) return;
     const next = newClip(project.clips.length);
     modifyProject({ clips: [...project.clips, next] });
@@ -731,16 +815,16 @@ function Workspace({
     if (ref) setPreview(ref);
     else notify(`@${name} has no matching image yet. Add it in References.`);
   }
-  function exportDraft() {
-    if (!project) return;
+  function exportDraft(source = project) {
+    if (!source) return;
     const blob = new Blob(
       [
         JSON.stringify(
           {
             format: "comfyTR-draft-v1",
-            project,
+            project: source,
             references: references
-              .filter((r) => project.referenceIds.includes(r.id))
+              .filter((r) => source.referenceIds.includes(r.id))
               .map(({ id, name, url, description }) => ({
                 id,
                 name,
@@ -757,7 +841,7 @@ function Workspace({
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${project.title.replace(/[^a-z0-9-]/gi, "-").toLowerCase()}-draft.json`;
+    link.download = source.title.replace(/[^a-z0-9-]/gi, "-").toLowerCase() + "-draft.json";
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     notify(
@@ -807,19 +891,13 @@ function Workspace({
         aria-modal={isMobile && mobileNav ? true : undefined}
         aria-label="Workspace navigation"
       >
-        <button
-          className="brand"
-          onClick={() => navigate({ view: "projects" })}
-          aria-label="ClipWeave projects"
-        >
-          <span className="brand-mark">
-            <Clapperboard size={23} strokeWidth={1.65} />
-          </span>
-          <span>
-            comfy<span className="brand-tr">TR</span>
-            <span className="brand-dot">.</span>
-          </span>
-        </button>
+          <Link className="brand" href="/" aria-label="Return to the ClipWeave landing page">
+            <Image className="brand-mark" src="/brand/clipweave-mark.png" alt="" width={32} height={35} priority />
+            <span>
+              Clip<span className="brand-tr">Weave</span>
+            </span>
+          </Link>
+
         <div className="workspace-switch">
           <span className="workspace-avatar">{userLabel[0].toUpperCase()}</span>
           <div>
@@ -887,7 +965,7 @@ function Workspace({
           </button>
           <button
             className="account-row"
-            onClick={() => setDialog(user ? "settings" : "auth")}
+            onClick={() => setDialog(user ? "account" : "auth")}
           >
             <span className="account-avatar">
               {user ? userLabel.slice(0, 2).toUpperCase() : "Y"}
@@ -924,7 +1002,7 @@ function Workspace({
             >
               {route.view === "library" ? "Reference library" : "Projects"}
             </button>
-            {route.view === "studio" && project && (
+            {project && (
               <>
                 <ChevronRight size={14} />
                 <strong>{project.title}</strong>
@@ -946,7 +1024,7 @@ function Workspace({
             )}
             <button
               className="top-avatar"
-              onClick={() => setDialog(user ? "settings" : "auth")}
+              onClick={() => setDialog(user ? "account" : "auth")}
               aria-label={user ? "Account settings" : "Sign in"}
             >
               {userLabel[0].toUpperCase()}
@@ -958,7 +1036,7 @@ function Workspace({
             <div className="error-banner" role="alert">
               {saveError}
               {project && (
-                <button onClick={exportDraft}>Download backup</button>
+                <button onClick={() => exportDraft()}>Download backup</button>
               )}
             </div>
           )}
@@ -981,6 +1059,7 @@ function Workspace({
                   <p>A story taking shape, one scene at a time.</p>
                 </div>
                 <div className="heading-actions">
+
                   <button
                     className="button secondary"
                     aria-label="Project settings"
@@ -993,7 +1072,7 @@ function Workspace({
                     className="button secondary icon-only"
                     aria-label="Download project draft"
                     title="Download project draft"
-                    onClick={exportDraft}
+                    onClick={() => exportDraft()}
                   >
                     <ArrowDownToLine size={17} />
                   </button>
@@ -1357,11 +1436,7 @@ function Workspace({
                                           <div className="clip-card-content">
                                             <div className="clip-card-title">
                                               <strong>{c.title}</strong>
-                                              {c.status === "validated" ? (
-                                                <LockKeyhole size={14} />
-                                              ) : (
-                                                <ChevronRight size={15} />
-                                              )}
+                                              <ChevronRight size={15} />
                                             </div>
                                             <p>
                                               {(
@@ -1432,6 +1507,7 @@ function Workspace({
                             }
                             renderState={renders[clip.id]}
                             onGenerate={() => void generateClip(clip)}
+                            onRegenerate={() => setDialog("regenerate")}
                             onRemove={() => removeClip(clip.id)}
                             onValidate={() => setDialog("validate")}
                             onNotice={notify}
@@ -1599,35 +1675,41 @@ function Workspace({
               </div>
               <div className={`project-grid ${listView ? "list-view" : ""}`}>
                 {projectList.map((p) => (
-                  <a
-                    key={p.id}
-                    className="project-card"
-                    href={studioUrl({ view: "studio", projectId: p.id })}
-                    onClick={(e) => { if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) { e.preventDefault(); openProject(p); } }}
-                  >
-                    <div className="project-card-image">
-                      <Photo src={p.image} alt={`${p.title} cover`} />
-                      <span className="image-badge">
-                        {p.sample ? "Example project" : "Draft"}
-                      </span>
-                      <span className="open-project-circle">
-                        <ArrowUpRight size={20} />
-                      </span>
-                    </div>
-                    <div className="project-card-info">
-                      <h3>{p.title}</h3>
-                      <div>
-                        <span>
-                          <Clapperboard size={13} />
-                          Open project
-                        </span>
-                        <span>{p.ratio}</span>
-                        <span>
-                          {p.sample ? "Explore the studio" : "Saved to account"}
+                  <div className="project-card-wrap" key={p.id}>
+                    <a
+                      className="project-card"
+                      href={studioUrl({ view: "studio", projectId: p.id })}
+                      onClick={(e) => {
+                        if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
+                          e.preventDefault();
+                          openProject(p);
+                        }
+                      }}
+                    >
+                      <div className="project-card-image">
+                        <Photo src={p.image} alt={`${p.title} cover`} />
+                        <span className="image-badge">
+                          {p.sample ? "Example project" : "Draft"}
                         </span>
                       </div>
-                    </div>
-                  </a>
+                      <div className="project-card-info">
+                        <h3>{p.title}</h3>
+                        <div>
+                          <span><Clapperboard size={13} /> Open project</span>
+                          <span>{p.ratio}</span>
+                          <span>{p.sample ? "Explore the studio" : "Saved to account"}</span>
+                        </div>
+                      </div>
+                    </a>
+                    <button
+                      className="project-card-settings"
+                      aria-label={`Project settings for ${p.title}`}
+                      title="Project settings"
+                      onClick={() => void openQuickSettings(p)}
+                    >
+                      <Settings2 size={16} />
+                    </button>
+                  </div>
                 ))}
                 <button
                   className="new-project-card"
@@ -1699,7 +1781,19 @@ function Workspace({
           </button>
         </div>
       )}
-      {dialog === "new" && (
+      {dialog === "delete" && settingsProject && (
+        <Modal title="Delete this project?" eyebrow="PERMANENT ACTION" onClose={() => !deleteBusy && setDialog(null)}>
+          <p className="modal-intro">
+            This permanently removes <strong>{settingsProject.title}</strong>, its clips, generated videos, and matching RunPod motion cache. Your account reference images stay in your library.
+          </p>
+          <div className="modal-footer">
+            <button className="button secondary" disabled={deleteBusy} onClick={() => setDialog(null)}>Keep project</button>
+            <button className="button danger" disabled={deleteBusy} onClick={() => void deleteProject()}>
+              <Trash2 size={16} /> {deleteBusy ? "Deleting…" : "Delete permanently"}
+            </button>
+          </div>
+        </Modal>
+      )}      {dialog === "new" && (
         <NewProjectForm
           onClose={() => setDialog(null)}
           onCreate={createProject}
@@ -1845,78 +1939,64 @@ function Workspace({
           </button>
         </Modal>
       )}
-      {dialog === "settings" && (
-        <Modal
-          title={
-            route.view === "studio" && project
-              ? "The details of your story."
-              : "Your creative workspace."
-          }
-          eyebrow="SETTINGS"
-          onClose={() => setDialog(null)}
-        >
-          {route.view === "studio" && project && (
-            <>
-              <label className="field">
-                Project name
-                <input
-                  value={project.title}
-                  maxLength={200}
-                  onChange={(e) => {
-                    if (e.target.value.trim())
-                      modifyProject({ title: e.target.value });
-                  }}
-                />
-              </label>
-              <p className="small muted">
-                Projects are saved to your account. Download a backup to keep a
-                separate copy.
-              </p>
-              <button
-                className="button secondary full-width"
-                onClick={exportDraft}
-              >
-                <ArrowDownToLine size={16} /> Download draft backup
-              </button>
-              <hr />
-            </>
-          )}
-          <div className="account-settings">
-            <span className="account-avatar large">
-              {userLabel[0].toUpperCase()}
-            </span>
-            <div>
-              <strong>{user?.email ?? "You’re exploring as a guest"}</strong>
-              <p>
-                {user
-                  ? "Account reference library connected"
-                  : "Sign in to upload and reuse your own images."}
-              </p>
-            </div>
-          </div>
-          {user ? (
+      {dialog === "settings" && settingsProject && (
+        <Modal title="Project quick settings" eyebrow="SETTINGS" onClose={() => setDialog(null)}>
+          <label className="field">
+            Project name
+            <input
+              value={settingsProject.title}
+              maxLength={200}
+              onChange={(e) => {
+                const title = e.target.value.trim();
+                if (!title) return;
+                if (project?.id === settingsProject.id) {
+                  modifyProject({ title: e.target.value });
+                  return;
+                }
+                const next = { ...settingsProject, title: e.target.value, updatedAt: new Date().toISOString() };
+                setQuickSettingsProject(next);
+                setProjects((current) => current.map((item) => item.id === next.id ? next : item));
+              }}
+            />
+          </label>
+          <p className="small muted">Quick settings do not open the project editor.</p>
+          <div className="project-settings-actions">
+            <span className="eyebrow">PROJECT ACTIONS</span>
             <button
               className="button secondary full-width"
-              onClick={async () => {
-                const result = await supabase?.auth.signOut();
-                if (result?.error) notify(result.error.message);
-                else setDialog(null);
+              onClick={() => {
+                setDialog(null);
+                duplicateProject(settingsProject, false);
               }}
             >
-              <LogOut size={16} /> Sign out
+              <Copy size={16} /> Create a new project version
             </button>
-          ) : (
-            <button
-              className="button primary full-width"
-              disabled={!authReady}
-              onClick={() => setDialog("auth")}
-            >
-              Sign in <ArrowRight size={16} />
+            <button className="button danger full-width" onClick={() => setDialog("delete")}>
+              <Trash2 size={16} /> Delete this project
             </button>
-          )}
+          </div>
         </Modal>
-      )}
-      {dialog === "wallet" && user && (
+      )}      {dialog === "account" && (
+        <Modal title="Your creative workspace." eyebrow="ACCOUNT" onClose={() => setDialog(null)}>
+          <div className="account-settings">
+            <span className="account-avatar large">{userLabel[0].toUpperCase()}</span>
+            <div>
+              <strong>{user?.email ?? "You’re exploring as a guest"}</strong>
+              <p>Account reference library connected</p>
+            </div>
+          </div>
+          <button
+            className="button secondary full-width"
+            onClick={async () => {
+              const result = await supabase?.auth.signOut();
+              if (result?.error) notify(result.error.message);
+              else setDialog(null);
+            }}
+          >
+            <LogOut size={16} /> Sign out
+          </button>
+        </Modal>
+      )}      {dialog === "wallet" && user && (
         <WalletDialog
           unlimited={wallet.unlimited} balanceCents={wallet.balance_cents}
           reservedCents={wallet.reserved_cents}
@@ -1977,6 +2057,23 @@ function Workspace({
               }}
             >
               <CheckCheck size={16} /> {validationBusy ? "Saving validation…" : "Validate and lock"}
+            </button>
+          </div>
+        </Modal>
+      )}
+      {dialog === "regenerate" && project && clip && (
+        <Modal title="Regenerate from this clip?" eyebrow="CONTINUITY RESET" onClose={() => setDialog(null)}>
+          <p className="modal-intro">
+            ClipWeave will remove this clip’s generated video and reset every later continued clip in this take to Draft.
+            The approved clips before it remain as the motion-context prefix for this render.
+          </p>
+          <p className="small muted">
+            The regenerated chain uses the same render profile as its approved prefix. Stale video segments are removed from the RunPod Network Volume.
+          </p>
+          <div className="modal-footer">
+            <button className="button secondary" onClick={() => setDialog(null)}>Keep current clips</button>
+            <button className="button danger" onClick={() => void regenerateClip(clip)}>
+              <Sparkles size={16} /> Reset and regenerate
             </button>
           </div>
         </Modal>
@@ -2141,6 +2238,27 @@ function WalletDialog({ unlimited, balanceCents, reservedCents, onClose, onRefre
   </Modal>;
 }
 
+function VolumeBackedVideo({ assetId }: { assetId: string }) {
+  const [src, setSrc] = useState("");
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let active = true;
+    let objectUrl = "";
+    void (async () => {
+      const session = await supabase?.auth.getSession();
+      const token = session?.data.session?.access_token;
+      if (!token) throw new Error("Sign in to play this video.");
+      const response = await fetch(`/api/videos/${assetId}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+      if (!response.ok) throw new Error("The video could not be loaded from the render volume.");
+      objectUrl = URL.createObjectURL(await response.blob());
+      if (active) setSrc(objectUrl);
+    })().catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : "The video could not be loaded."); });
+    return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [assetId]);
+  if (error) return <p className="modal-intro">{error}</p>;
+  if (!src) return <p className="modal-intro"><LoaderCircle size={16} className="spin" /> Loading video from render storage…</p>;
+  return <video className="video-preview" controls src={src} />;
+}
 function ClipEditor({
   project,
   clip,
@@ -2149,6 +2267,7 @@ function ClipEditor({
   onMention,
   renderState,
   onGenerate,
+  onRegenerate,
   onCompile,
   onValidate,
   onRemove,
@@ -2164,6 +2283,7 @@ function ClipEditor({
   onMention: (name: string) => void;
   renderState?: { jobId?: string; status: string; error?: string };
   onGenerate: () => void;
+  onRegenerate: () => void;
   onCompile: (patch?: Partial<Clip>) => void;
   onValidate: () => void;
   onRemove: () => void;
@@ -2229,9 +2349,9 @@ function ClipEditor({
             </button>
           )}
           <span className={`badge ${locked ? "green" : "ochre"}`}>
-            {locked ? <LockKeyhole size={12} /> : <span className="tiny-dot" />}
+            {locked ? <Check size={12} /> : <span className="tiny-dot" />}
             {locked
-              ? "Validated & locked"
+              ? "Validated"
               : clip.pendingDescription || clip.requestedChange
                 ? "Revision pending"
                 : "Ready to shape"}
@@ -2252,7 +2372,7 @@ function ClipEditor({
         className="scene-preview"
         onClick={() => setPreviewOpen(true)}
         aria-label={
-          clip.videoUrl ? "Open generated clip preview" : "Open reference still"
+          (clip.videoUrl || clip.videoAssetId) ? "Open generated clip preview" : "Open reference still"
         }
       >
         <Photo
@@ -2263,15 +2383,13 @@ function ClipEditor({
         <span className="preview-caption">
           <span>
             <ImageIcon size={14} />
-            {clip.videoUrl
+            {(clip.videoUrl || clip.videoAssetId)
               ? "View clip preview"
               : "Scene reference · not a generated video"}
           </span>
           <span>{clip.duration}s planned</span>
         </span>
-        <span className="expand-preview">
-          <ExternalLink size={16} />
-        </span>
+        {(clip.videoUrl || clip.videoAssetId) && <span className="preview-play" aria-hidden="true"><Play size={22} fill="currentColor" /></span>}
       </button>
       <div className="editor-body">
         <div className="description-heading">
@@ -2507,6 +2625,17 @@ function ClipEditor({
                 </option>
               ))}
             </select>
+            <label htmlFor="clip-render-preset">
+              <Sparkles size={14} /> Render
+            </label>
+            <select
+              id="clip-render-preset"
+              value={clip.renderPreset ?? "cinematic"}
+              onChange={(e) => onChange({ renderPreset: e.target.value as "quick" | "cinematic" })}
+            >
+              <option value="quick">Quick preview · 4-step</option>
+              <option value="cinematic">Cinematic detail · 8-step</option>
+            </select>
             <span>Draft timing · checked before rendering</span>
           </div>
         )}
@@ -2518,7 +2647,7 @@ function ClipEditor({
         <div>
           <span className="small muted">
             {locked
-              ? "A foundation for what comes next."
+              ? "Approved motion context is retained if you regenerate from here."
               : priorReady
                 ? "Your story. Your creative direction."
                 : "Validate earlier clips in this scene before generating this one."}
@@ -2528,13 +2657,14 @@ function ClipEditor({
           )}
         </div>
         {locked ? (
-          <button
-            className="button primary"
-            disabled={!nextExists}
-            onClick={onNext}
-          >
-            Next clip <ArrowRight size={16} />
-          </button>
+          <div className="editor-footer-actions">
+            <button className="button secondary" onClick={onRegenerate}>
+              <Sparkles size={16} /> Regenerate from here
+            </button>
+            <button className="button primary" disabled={!nextExists} onClick={onNext}>
+              Next clip <ArrowRight size={16} />
+            </button>
+          </div>
         ) : clip.videoUrl && clip.status === "ready" ? (
           <button
             className="button primary"
@@ -2581,12 +2711,12 @@ function ClipEditor({
       {previewOpen && (
         <Modal
           title={clip.title}
-          eyebrow={clip.videoUrl ? "GENERATED CLIP" : "REFERENCE STILL"}
+          eyebrow={(clip.videoUrl || clip.videoAssetId) ? "GENERATED CLIP" : "REFERENCE STILL"}
           onClose={() => setPreviewOpen(false)}
           wide
         >
-          {clip.videoUrl ? (
-            <video className="video-preview" controls src={clip.videoUrl} />
+          {(clip.videoUrl || clip.videoAssetId) ? (
+            clip.videoAssetId ? <VolumeBackedVideo assetId={clip.videoAssetId} /> : <video className="video-preview" controls src={clip.videoUrl} />
           ) : (
             <>
               <Photo

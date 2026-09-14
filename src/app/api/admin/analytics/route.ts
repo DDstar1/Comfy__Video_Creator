@@ -1,7 +1,8 @@
 import { authenticatedClient } from '@/lib/server/render-auth';
 import { hasUnlimitedGeneration } from '@/lib/server/billing-access';
 import { usageTrackingConfigured } from '@/lib/server/generation-usage';
-import { configuredRate, generations, summarize, type RenderRow, type UsageRow } from '@/lib/admin-analytics';
+import { generations, summarize, type RenderRow, type UsageRow } from '@/lib/admin-analytics';
+import { fixedRenderRate } from '@/lib/server/render-pricing';
 
 export const runtime = 'nodejs';
 export async function GET(request: Request) {
@@ -32,11 +33,12 @@ export async function GET(request: Request) {
     const usage = await records<UsageRow>('usage');
     const payments = await records<{ owner_id: string; amount_cents: number }>('payments');
     const wallets = await records<{ balance_cents: number; reserved_cents: number }>('wallets');
-    const rows = generations(renders, usage, configuredRate(process.env.RUNPOD_GPU_RATE_CENTS_PER_HOUR));
+    const fixedRate = await fixedRenderRate(client);
+    const rows = generations(renders, usage, fixedRate);
     return Response.json({ users, generations: rows, summary: summarize(rows),
       deposits: payments.reduce((sum, row) => sum + Number(row.amount_cents), 0),
       walletLiability: wallets.reduce((sum, row) => sum + Number(row.balance_cents) + Number(row.reserved_cents), 0),
-      trackingConfigured: usageTrackingConfigured(), since: since.toISOString(), until: until.toISOString(),
+      trackingConfigured: usageTrackingConfigured(), runpodRateCentsPerHour: fixedRate, since: since.toISOString(), until: until.toISOString(),
       netProfit: null,
     }, { headers });
   } catch (error) {
@@ -44,3 +46,4 @@ export async function GET(request: Request) {
     return Response.json({ error: unauthorized ? 'Sign in with the owner account.' : 'Analytics unavailable. Check the admin migration and server configuration.' }, { status: unauthorized ? 401 : 503, headers });
   }
 }
+

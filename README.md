@@ -1,5 +1,32 @@
 # ClipWeave Next.js application
 
+## Current product state — 2026-09-13
+
+The frontend is the complete ClipWeave web application and server-side prompt
+backend. It serves the landing page, policy pages, Studio, account reference
+library, authenticated project routes and the owner-only analytics dashboard.
+
+- Direct routes are `/studio/projects/PROJECT_ID?tab=story|references|clips`,
+  `/studio/library` and `/admin`. Legacy hashes migrate to the route model.
+- Project quality/frame settings are immutable after clips exist; unresolved
+  suggested references block a render until the user links an image or dismisses
+  the suggestion.
+- Render recovery, validated chain locks and the private CPU FFmpeg merge are
+  implemented. Merge exports are re-signed when a project is reopened.
+- The shared generated logo at
+  [public/brand/clipweave-mark.png](public/brand/clipweave-mark.png) appears in
+  public navigation/footer, policy headers, the Studio sidebar and favicon/apple
+  metadata. It uses Next Image with fixed dimensions to avoid layout shift.
+- Admin usage writes use server-only `SUPABASE_SERVICE_KEY` (or the compatible
+  `SUPABASE_SERVICE_ROLE_KEY`). Set OpenAI and RunPod rate variables described
+  in [ADMIN_ANALYTICS.md](docs/ADMIN_ANALYTICS.md) before interpreting estimates.
+
+Verification for this checkpoint: 39 unit tests, TypeScript and targeted ESLint
+passed; the logo loaded on live local landing, policy and Studio pages without
+browser errors or mobile overflow. No new paid OpenAI or RunPod generation was
+submitted for these checks.
+
+
 This folder contains both the customer frontend and the server-side AI prompt
 backend. It uses Next.js 16, React 19, TypeScript, Supabase, OpenAI, Zod and Lucide.
 See the [root README](../README.md) for overall status and [UI_PLAN.md](UI_PLAN.md)
@@ -503,6 +530,8 @@ local test suite.
 
 See the [Claude Code end-to-end runbook](docs/e2e/README.md) for exact setup,
 fixture, reference paths, browser steps, acceptance checks and debugging entry points.
+For continued-clip regeneration and motion-cache handling, see [the chain regeneration guide](docs/workspace/CHAIN_REGENERATION.md).
 Latest checkpoint: all four clips in the chain fixture are validated, and its
 19.783-second merged export is saved. Direct-project reload and browser Back were
 verified. Preserve the existing four-by-five-second project (20 seconds).
+

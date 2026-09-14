@@ -7,7 +7,7 @@ import { summarize, type AdminUser, type Generation } from '@/lib/admin-analytic
 import styles from './admin-dashboard.module.css';
 
 type Data = { users: AdminUser[]; generations: Generation[]; summary: ReturnType<typeof summarize>;
-  deposits: number; walletLiability: number; trackingConfigured: boolean; since: string; until: string };
+  deposits: number; walletLiability: number; trackingConfigured: boolean; runpodRateCentsPerHour: number | null; since: string; until: string };
 const money = (cents: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(cents / 100);
 
 export function AdminDashboard() {
@@ -64,7 +64,7 @@ export function AdminDashboard() {
     {loading && <p role="status">Loading analytics...</p>}
     {error && <p className={styles.warning} role="alert">{error}</p>}
     {data && <>
-      <p className={styles.warning}>Estimates exclude OpenAI tools, idle GPU time, storage, payment fees, refunds and operating expenses. Historical OpenAI requests are not backfilled. Net profit is unavailable until these costs are reconciled.</p>
+      <p className={styles.warning}>Estimates exclude OpenAI tools, idle GPU time, storage, payment fees, refunds and operating expenses. {data.runpodRateCentsPerHour === null ? 'Fixed Supabase render rate is not configured, so GPU estimates are shown as unknown.' : `Fixed Supabase render rate: ${money(data.runpodRateCentsPerHour)} per hour.`} Historical OpenAI requests are not backfilled. Net profit is unavailable until these costs are reconciled.</p>
       {!data.trackingConfigured && <p className={styles.warning}>Usage tracking is not configured: SUPABASE_SERVICE_ROLE_KEY is required on the server. New OpenAI calls and failed-render costs are not being recorded.</p>}
       {tab === 'overview' && <>
         <section className={styles.metrics} aria-label="Financial overview">
@@ -81,7 +81,7 @@ export function AdminDashboard() {
         {!users.length && <p>No matching users.</p>}
       </section>}
       {tab === 'generations' && <section><div className={styles.controls}><label>User<select value={selected} onChange={event => { setSelected(event.target.value); setPage(0); }}><option value="">All users</option>{data.users.map(user => <option key={user.id} value={user.id}>{user.email}</option>)}</select></label><label>Provider<select value={provider} onChange={event => { setProvider(event.target.value); setPage(0); }}><option value="all">All providers</option><option value="runpod">RunPod</option><option value="openai">OpenAI / ChatGPT</option></select></label></div>
-        <div className={styles.tableWrap}><table><thead><tr>{['Created', 'User / project', 'Provider / action', 'Status', 'Usage', 'Revenue', 'Cost (est.)'].map(label => <th key={label}>{label}</th>)}</tr></thead><tbody>{rows.slice(page * 25, page * 25 + 25).map(row => <tr key={`${row.provider}-${row.id}`}><td>{new Date(row.created_at).toLocaleString()}<small>{row.id}</small></td><td>{data.users.find(user => user.id === row.owner_id)?.email ?? row.owner_id ?? 'Local development'}<small>{row.project_id ?? 'No project'}</small></td><td>{row.provider}<small>{row.model ?? row.action ?? 'render'}</small></td><td><span className={styles.status} data-status={row.status}>{row.status}</span></td><td>{row.provider === 'runpod' ? row.runtime_ms == null ? 'Unknown runtime' : `${(row.runtime_ms / 1000).toFixed(1)} sec` : `${row.input_tokens ?? '?'} in / ${row.output_tokens ?? '?'} out`}</td><td>{money(row.revenue)}</td><td>{row.cost === null ? 'Unknown' : money(Number(row.cost))}</td></tr>)}</tbody></table></div>
+        <div className={styles.tableWrap}><table><thead><tr>{['Created', 'User / project', 'Provider / action', 'Status', 'Usage', 'GPU rate / hr', 'Revenue', 'Cost (est.)'].map(label => <th key={label}>{label}</th>)}</tr></thead><tbody>{rows.slice(page * 25, page * 25 + 25).map(row => <tr key={`${row.provider}-${row.id}`}><td>{new Date(row.created_at).toLocaleString()}<small>{row.id}</small></td><td>{data.users.find(user => user.id === row.owner_id)?.email ?? row.owner_id ?? 'Local development'}<small>{row.project_id ?? 'No project'}</small></td><td>{row.provider}<small>{row.model ?? row.action ?? 'render'}</small></td><td><span className={styles.status} data-status={row.status}>{row.status}</span></td><td>{row.provider === 'runpod' ? row.runtime_ms == null ? 'Unknown runtime' : `${(row.runtime_ms / 1000).toFixed(1)} sec` : `${row.input_tokens ?? '?'} in / ${row.output_tokens ?? '?'} out`}</td><td>{row.provider === 'runpod' ? row.gpu_rate_cents_per_hour == null ? 'Not recorded' : `${money(row.gpu_rate_cents_per_hour)} / hr` : '—'}</td><td>{money(row.revenue)}</td><td>{row.cost === null ? 'Unknown' : money(Number(row.cost))}</td></tr>)}</tbody></table></div>
         {!rows.length && <p>No generations match these filters.</p>}
       </section>}
       {tab !== 'overview' && <div className={styles.pagination}><button disabled={page === 0} onClick={() => setPage(value => value - 1)}>Previous</button><span>Page {page + 1} of {Math.max(1, Math.ceil((tab === 'users' ? users.length : rows.length) / 25))}</span><button disabled={(page + 1) * 25 >= (tab === 'users' ? users.length : rows.length)} onClick={() => setPage(value => value + 1)}>Next</button></div>}
@@ -89,3 +89,4 @@ export function AdminDashboard() {
     </>}
   </main>;
 }
+

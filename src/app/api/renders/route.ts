@@ -68,7 +68,7 @@ function assertClipWeaveWorkflow(
   if (
     !extender?.inputs ||
     extender.inputs.run_mode !== "clip_by_clip" ||
-    extender.inputs.steps !== 8 ||
+    ![4, 8].includes(Number(extender.inputs.steps)) ||
     extender.inputs.resolution_mode !== "manual" ||
     !output?.inputs ||
     output.inputs.output_directory !== "" ||
@@ -140,7 +140,7 @@ export async function POST(request: Request) {
     assertClipWeaveWorkflow(input.workflow, input.clipId, input.images ?? []);
     const { data: clip, error: clipError } = await client
       .from(CLIPS)
-      .select("id,project_id,status,technical_prompt,continuity_stale,suggested_references")
+      .select("id,project_id,status,technical_prompt,continuity_stale,suggested_references,render_preset")
       .eq("id", input.clipId)
       .eq("project_id", input.projectId)
       .eq("owner_id", user.id)
@@ -176,7 +176,7 @@ export async function POST(request: Request) {
     // first clip always starts one.
     const { data: ordered, error: orderError } = await client
       .from(CLIPS)
-      .select("id,continues_previous")
+      .select("id,continues_previous,render_preset")
       .eq("project_id", input.projectId)
       .eq("owner_id", user.id)
       .order("position");
@@ -186,10 +186,28 @@ export async function POST(request: Request) {
         { status: 409 },
       );
     let chainIndex = -1;
+    let chainStart = 0;
+    let targetPosition = -1;
     for (const [position, row] of ordered.entries()) {
-      if (position === 0 || row.continues_previous === false) chainIndex += 1;
-      if (row.id === input.clipId) break;
+      if (position === 0 || row.continues_previous === false) {
+        chainIndex += 1;
+        chainStart = position;
+      }
+      if (row.id === input.clipId) {
+        targetPosition = position;
+        break;
+      }
     }
+    const preset = clip.render_preset === "quick" ? "quick" : "cinematic";
+    if (targetPosition < 0)
+      return Response.json({ error: "Clip is not in this project's render order." }, { status: 409 });
+    if (ordered.slice(chainStart, targetPosition + 1).some(
+      (row) => (row.render_preset === "quick" ? "quick" : "cinematic") !== preset,
+    ))
+      return Response.json(
+        { error: "Continued clips must use one render profile. Regenerate this chain from its first clip to change it." },
+        { status: 409 },
+      );
 
     const cacheNamespace = `${user.id}:${input.projectId}:${chainIndex}`;
     const { data: job, error: jobError } = await client

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import styles from "./policy.module.css";
@@ -13,6 +14,7 @@ export default function PolicyPage({
     <div className={styles.page}>
       <header className={styles.header}>
         <Link href="/" className={styles.brand}>
+          <Image src="/brand/clipweave-mark.png" alt="" width={28} height={28} />
           ClipWeave
         </Link>
         <Link href="/">Back to home</Link>

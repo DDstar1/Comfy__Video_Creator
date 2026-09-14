@@ -18,9 +18,17 @@
   border-bottom: 1px solid #d8dfcf;
 }
 .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 24px;
   font-weight: 750;
   color: #294f3b;
+}
+.brand img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
 }
 .content {
   max-width: 780px;

@@ -47,9 +47,7 @@ and a working database; a configured key alone does not prove capture succeeded.
 
 Run `npm test`, `npx tsc --noEmit`, and ESLint. The new unit suite covers unknown
 costs, cached tokens, failed attempts, owner usage, and SQL authorization guards.
-On 2026-09-13 the linked migration could not be applied because the machine
-could not resolve api.supabase.com. Live database authorization and owner
-analytics remain unverified until that deployment succeeds.
+On 2026-09-13 the linked migration was applied successfully with \`supabase db push --yes\`. The service key is available to the local application process. No paid provider generation was submitted to prove live cost capture; treat provider costs as estimates until rate configuration and a normal production generation have been reconciled.
 
 Local checks passed: TypeScript, targeted ESLint, accounting/unit tests, live
 unauthenticated API rejection (401), desktop/mobile signed-out rendering, and

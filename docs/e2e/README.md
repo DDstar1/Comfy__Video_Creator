@@ -1,5 +1,22 @@
 # ClipWeave end-to-end test and Claude Code handoff
 
+## Documentation checkpoint — 2026-09-13
+
+The local product now also includes the owner-only `/admin` dashboard and a
+shared generated ClipWeave mark. The analytics migration is applied; provider
+usage capture requires the server-only `SUPABASE_SERVICE_KEY` (or compatible
+`SUPABASE_SERVICE_ROLE_KEY`) and configured pricing rates before costs are
+interpreted. Net profit is intentionally unavailable until operating expenses are
+reconciled.
+
+The logo is present on landing, policy, Studio and site-icon surfaces. Current
+local checks passed 39 unit tests, TypeScript and targeted ESLint; live browser
+checks found the logo loaded at desktop/mobile sizes with no console errors or
+horizontal overflow. These checks submitted no paid provider generation and do
+not replace the remaining production payment, hosting, provider-cost and full
+live-RLS test work described below.
+
+
 Last checkpoint: 2026-09-12. This is a reproducible manual/agent browser test,
 not an automated test suite.
 
@@ -106,7 +123,7 @@ OPENAI_DIRECTOR_SKILL_ID=
 OPENAI_DIRECTOR_SKILL_VERSION=
 RUNPOD_ENDPOINT_API_KEY=
 RUNPOD_ENDPOINT_ID=nqpfrj6twlaz5h
-SUPABASE_SERVICE_ROLE_KEY=
+SUPABASE_SERVICE_KEY=
 RUNPOD_GPU_RATE_CENTS_PER_HOUR=58
 CLIPWEAVE_MARGIN_CENTS=30
 ```

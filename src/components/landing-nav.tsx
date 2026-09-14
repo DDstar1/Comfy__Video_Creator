@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
 import LandingAuthButton from "./landing-auth-button";
@@ -21,7 +22,7 @@ export default function LandingNav() {
   return (
     <nav className={styles.nav} aria-label="Main navigation">
       <Link href="/" className={styles.brand} aria-label="ClipWeave home">
-        <span className={styles.brandMark}>C</span>
+        <Image className={styles.brandMark} src="/brand/clipweave-mark.png" alt="" width={34} height={34} priority />
         Clip<span>Weave</span>
       </Link>
 

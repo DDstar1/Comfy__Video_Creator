@@ -10,7 +10,9 @@ const MODEL = "minimax_h3_ref2va_pruned_int8_convrot.safetensors";
 const TEXT_ENCODER = "qwen3vl_32b_minimax_h3_int8_convrot.safetensors";
 const VIDEO_VAE = "minimax_h3_video_vae_fp16.safetensors";
 const AUDIO_VAE = "minimax_h3_audio_vae_fp32.safetensors";
-const TURBO_LORA =
+const QUICK_PREVIEW_LORA =
+  "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors";
+const CINEMATIC_DETAIL_LORA =
   "minimax_h3_ref2v_turbo_8step_v1.0_768p_bf16.safetensors";
 
 export function dimensions(ratio: Project["ratio"], quality: Project["quality"] = "draft"): [number, number] {
@@ -67,6 +69,9 @@ export async function assembleH3Workflow(
   // what makes one scene morph into the next instead of cutting to it.
   const { start: chainStart } = chainMembers(project.clips, targetIndex);
   const sequence = project.clips.slice(chainStart, targetIndex + 1);
+  const profile = target.renderPreset ?? "cinematic";
+  if (sequence.some((clip) => (clip.renderPreset ?? "cinematic") !== profile))
+    throw new Error("Continued clips must use one render profile. Regenerate this chain from its first clip to change it.");
   if (sequence.some((clip) => !clip.technicalPrompt?.trim()))
     throw new Error(
       "Compile every clip through the current clip before rendering.",
@@ -86,6 +91,8 @@ export async function assembleH3Workflow(
     })),
   );
   const [width, height] = dimensions(project.ratio, project.quality);
+  const quickPreview = profile === "quick";
+  const lora = quickPreview ? QUICK_PREVIEW_LORA : CINEMATIC_DETAIL_LORA;
   const workflow: Record<string, ApiNode> = {
     "3": {
       class_type: "UNETLoader",
@@ -99,7 +106,7 @@ export async function assembleH3Workflow(
     "6": { class_type: "VAELoader", inputs: { vae_name: AUDIO_VAE } },
     "13": {
       class_type: "LoraLoaderModelOnly",
-      inputs: { model: ["3", 0], lora_name: TURBO_LORA, strength_model: 1 },
+      inputs: { model: ["3", 0], lora_name: lora, strength_model: 1 },
     },
   };
   const promptInputs: Record<string, unknown> = {};
@@ -139,7 +146,7 @@ export async function assembleH3Workflow(
       width,
       height,
       ref_image_size: "match",
-      steps: 8,
+      steps: quickPreview ? 4 : 8,
       sampler_name: "euler",
       scheduler: "simple",
       denoise: 1,

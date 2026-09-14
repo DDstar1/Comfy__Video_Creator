@@ -1,5 +1,18 @@
 # ClipWeave database and reference storage
 
+## Current database state — 2026-09-13
+
+This handoff copy mirrors the active Supabase documentation. Both the
+project-quality/reference migration and the owner analytics migration are applied.
+`comfyTR_generation_usage` stores non-sensitive provider usage metadata through
+server-only credentials; the `comfyTR_admin_records` RPC independently verifies
+the designated owner before any cross-tenant read. Estimates with missing rates
+or runtimes remain unknown, and wallet deposits are not booked as render revenue.
+
+See [../../ADMIN_ANALYTICS.md](../../ADMIN_ANALYTICS.md) for the complete
+configuration and accounting limits.
+
+
 This folder is linked to the existing shared `general_db` Supabase project.
 Earlier migrations belong to other applications; do not rename or reset them.
 All tables added for this application must use the exact `comfyTR_` prefix.

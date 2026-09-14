@@ -3,10 +3,11 @@ export type Generation = {
   provider: 'openai' | 'runpod'; status: string; created_at: string;
   model?: string | null; action?: string; input_tokens?: number | null;
   output_tokens?: number | null; runtime_ms?: number | null;
+  gpu_rate_cents_per_hour?: number | null;
   revenue: number; cost: number | null;
 };
 export type AdminUser = { id: string; email: string; full_name: string; created_at: string };
-export type UsageRow = Omit<Generation, 'revenue' | 'cost'> & { external_id: string | null; estimated_cost_cents: number | null };
+export type UsageRow = Omit<Generation, 'revenue' | 'cost'> & { external_id: string | null; estimated_cost_cents: number | null; rate_snapshot?: { cents_per_hour?: number | null } | null };
 export type RenderRow = Omit<Generation, 'provider' | 'revenue' | 'cost'> & { charged_cents: number | null };
 
 export function configuredRate(value: string | undefined): number | null {
@@ -27,6 +28,7 @@ export function generations(renders: RenderRow[], usage: UsageRow[], legacyRate:
       const snapshot = recorded.get(row.id);
       return { ...row, provider: 'runpod' as const, revenue: Number(row.charged_cents ?? 0),
         runtime_ms: snapshot?.runtime_ms ?? row.runtime_ms,
+        gpu_rate_cents_per_hour: snapshot?.rate_snapshot?.cents_per_hour ?? legacyRate,
         cost: snapshot ? snapshot.estimated_cost_cents :
           (legacyRate !== null && Number(row.runtime_ms) > 0 ? Number(row.runtime_ms) / 3_600_000 * legacyRate : null) };
     }),
@@ -44,3 +46,4 @@ export function summarize(rows: Generation[]) {
     margin: revenue - cost, active: rows.length - completed - failed,
     successRate: completed + failed ? completed / (completed + failed) * 100 : null };
 }
+

@@ -8,8 +8,9 @@
   background: var(--cream);
   color: var(--ink);
   font-size: 16px;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
+
 .nav {
   height: 82px;
   max-width: 1240px;
@@ -32,15 +33,11 @@
   color: var(--green);
 }
 .brandMark {
-  display: grid;
-  place-items: center;
+  display: block;
   width: 34px;
-  height: 38px;
-  border-radius: 9px 9px 12px 7px;
-  background: var(--green);
-  color: white;
-  font-family: Georgia, serif;
-  transform: rotate(-5deg);
+  height: 34px;
+  object-fit: contain;
+  flex: 0 0 auto;
 }
 .navActions {
   display: flex;
@@ -334,6 +331,41 @@
   font-size: 14px;
   line-height: 1.6;
   color: #6b746b;
+}
+/* The cards layer over one another as the visitor scrolls through the process. */
+@media (min-width: 901px) {
+  .stepGrid {
+    display: block;
+    padding-bottom: calc(180px + 10vh);
+  }
+  .how { overflow: visible; }
+  .stepCard {
+    position: sticky;
+    min-height: 330px;
+    width: min(75vw, 1100px);
+    max-width: 1100px;
+    margin: 0 auto 22vh;
+    box-shadow: 0 24px 48px rgb(43 58 41 / 12%);
+    transform-origin: center top;
+    will-change: transform, filter;
+  }
+  .stepCard:nth-child(1) {
+    z-index: 1;
+    background: #fff;
+  }
+  .stepCard:nth-child(2) {
+    z-index: 2;
+    background: #fbfcf7;
+  }
+  .stepCard:nth-child(3) {
+    z-index: 3;
+    background: #f7faf1;
+  }
+  .stepCard:nth-child(4) {
+    z-index: 4;
+    background: #f2f6e9;
+    margin-bottom: 0;
+  }
 }
 .feature {
   max-width: 1240px;
@@ -992,5 +1024,68 @@
     border-radius: 8px;
     background: var(--green) !important;
     color: white !important;
+  }
+}
+/* Keep the same guided stack on tablets and phones, with room for each card. */
+@media (max-width: 900px) {
+  .stepGrid {
+    display: block;
+    padding-bottom: 150px;
+  }
+  .how { overflow: visible; }
+  .stepCard {
+    position: sticky;
+    width: 100%;
+    min-height: 260px;
+    margin: 0 auto 16vh;
+    box-shadow: 0 18px 34px rgb(43 58 41 / 12%);
+    transform-origin: center top;
+    will-change: transform, filter;
+  }
+  .stepCard:nth-child(1) {
+    z-index: 1;
+    background: #fff;
+  }
+  .stepCard:nth-child(2) {
+    z-index: 2;
+    background: #fbfcf7;
+  }
+  .stepCard:nth-child(3) {
+    z-index: 3;
+    background: #f7faf1;
+  }
+  .stepCard:nth-child(4) {
+    z-index: 4;
+    background: #f2f6e9;
+    margin-bottom: 0;
+  }
+}
+@media (max-width: 620px) {
+  .footer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 20px;
+    min-height: 0;
+    padding: 32px 20px;
+  }
+  .footer .brand {
+    width: max-content;
+  }
+  .footerCopy {
+    width: 100%;
+  }
+  .footerCopy p {
+    margin: 0;
+  }
+  .footerCopy small {
+    max-width: 340px;
+  }
+  .policyLinks {
+    display: grid;
+    gap: 13px;
+  }
+  .footer button {
+    justify-self: start;
   }
 }

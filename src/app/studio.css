@@ -138,6 +138,8 @@ img {
 }
 .brand {
   display: flex;
+  color: inherit;
+  text-decoration: none;
   align-items: center;
   gap: 10px;
   font-size: 30px;
@@ -147,14 +149,10 @@ img {
   text-align: left;
 }
 .brand-mark {
-  display: grid;
-  place-items: center;
   width: 32px;
   height: 35px;
-  background: var(--olive);
-  color: white;
-  border-radius: 8px;
-  transform: rotate(-6deg);
+  object-fit: contain;
+  flex: 0 0 auto;
 }
 .brand-tr {
   font-weight: 420;
@@ -232,6 +230,17 @@ img {
 .button.secondary:hover:not(:disabled) {
   background: #eff2e9;
   border-color: #bec8b3;
+}
+.button.danger,
+.danger-button {
+  background: #8f3429;
+  border-color: #8f3429;
+  color: #fff;
+}
+.button.danger:hover:not(:disabled),
+.danger-button:hover:not(:disabled) {
+  background: #76261e;
+  border-color: #76261e;
 }
 .button.icon-only {
   padding: 10px;
@@ -889,10 +898,9 @@ img {
   gap: 8px;
   flex-shrink: 0;
 }
-/* A clip being generated on RunPod. The card breathes and a bar sweeps its top
-   edge, so an in-flight render is visible from the sequence without opening the
-   clip. Renders take minutes, so this runs for a long time: keep it slow and
-   low-contrast rather than attention-grabbing. */
+/* A clip being generated on RunPod gets a visible, low-contrast sweep across
+   the card. Renders take minutes, so the card stays still while the motion
+   clearly communicates that work is in progress. */
 @keyframes clip-breathe {
   0%,
   100% {
@@ -912,18 +920,35 @@ img {
     transform: translateX(100%);
   }
 }
+@keyframes clip-card-shimmer {
+  from {
+    transform: translateX(-125%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
 .clip-card.generating {
-  animation: clip-breathe 2.4s ease-in-out infinite;
   position: relative;
   overflow: hidden;
+  border-color: #a9bd8f;
+  box-shadow: 0 0 0 1px rgba(122, 143, 92, 0.09);
 }
 .clip-card.generating:after {
   content: "";
   position: absolute;
-  inset: 0 0 auto 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, #7a8f5c, transparent);
-  animation: clip-sweep 1.7s linear infinite;
+  inset: 0 auto 0 0;
+  width: 48%;
+  pointer-events: none;
+  background: linear-gradient(
+    105deg,
+    transparent 8%,
+    rgba(210, 225, 188, 0.06) 30%,
+    rgba(178, 202, 146, 0.34) 50%,
+    rgba(210, 225, 188, 0.06) 70%,
+    transparent 92%
+  );
+  animation: clip-card-shimmer 2.6s ease-in-out infinite;
 }
 .button.primary.working {
   animation: clip-breathe 2.4s ease-in-out infinite;
@@ -943,14 +968,10 @@ img {
   animation: clip-sweep 1.7s linear infinite;
 }
 @media (prefers-reduced-motion: reduce) {
-  .clip-card.generating,
   .clip-card.generating:after,
   .button.primary.working,
   .button.primary.working:after {
     animation: none;
-  }
-  .clip-card.generating {
-    border-color: #a9bd8f;
   }
 }
 .clip-continuity {
@@ -1045,19 +1066,22 @@ img {
   gap: 6px;
   align-items: center;
 }
-.expand-preview {
+.preview-play {
   position: absolute;
-  right: 10px;
-  top: 10px;
+  inset: 0;
+  margin: auto;
   display: grid;
   place-items: center;
-  background: #17261e4f;
-  width: 27px;
-  height: 27px;
-  border-radius: 5px;
-  color: #f1f4ea;
-  border: 1px solid #ffffff25;
+  width: 54px;
+  height: 54px;
+  border-radius: 999px;
+  color: #fff;
+  background: #17261ed9;
+  border: 1px solid #ffffff70;
+  box-shadow: 0 7px 20px #00000055;
+  padding-left: 3px;
 }
+.scene-preview:hover .preview-play { transform: scale(1.07); }
 .editor-body {
   padding: 22px;
 }
@@ -1233,6 +1257,13 @@ img {
   min-height: 37px;
   font-size: 11px;
   padding: 10px 13px;
+}
+
+.editor-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
 }
 .clip-settings-line {
   display: flex;
@@ -1597,19 +1628,7 @@ img {
   border-radius: 4px;
   padding: 4px 7px;
 }
-.open-project-circle {
-  position: absolute;
-  bottom: 11px;
-  right: 11px;
-  width: 26px;
-  height: 26px;
-  border: 1px solid #ffffff3b;
-  background: #ffffff21;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  color: #fff;
-}
+
 .project-card-info {
   padding: 16px;
 }
@@ -2841,6 +2860,19 @@ hr {
   }
 }
 @media (max-width: 720px) {
+  /* Let the horizontal sequence reach both viewport edges while the editor
+     below keeps the readable page gutter. */
+  .clip-sequence {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+  }
+  .sequence-header {
+    padding-inline: 16px;
+  }
+  .clip-track {
+    padding-inline: 16px;
+  }
   .sidebar {
     transform: translateX(-100%);
     width: 236px;
@@ -3627,3 +3659,46 @@ hr {
 }
 
 .auth-tabs{margin-bottom:14px}.google-auth-button{width:100%;min-height:48px;border:1px solid #d9dfd2;border-radius:8px;background:#fff;color:#253126;display:flex;align-items:center;justify-content:center;gap:10px;font-weight:700}.google-auth-button:hover{border-color:#8da17a;background:#fafcf7}.google-auth-button>span{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#fff;border:1px solid #d7ddd0;color:#4285f4;font:700 14px Arial}.auth-divider{display:flex;align-items:center;gap:12px;color:#899385;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin:17px 0}.auth-divider::before,.auth-divider::after{content:'';height:1px;background:#e1e6dc;flex:1}.password-field{position:relative}.password-field input{padding-right:44px!important}.password-field button{position:absolute;right:5px;top:50%;transform:translateY(-50%);width:36px;height:36px;display:grid;place-items:center;color:#718068;border-radius:6px}.password-field button:hover{background:#edf2e7;color:#40543a}
+
+.project-settings-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 22px;
+}
+.project-settings-actions .eyebrow {
+  margin-bottom: 2px;
+}
+
+.project-card-wrap {
+  position: relative;
+  min-width: 0;
+}
+.project-card-wrap .project-card {
+  display: block;
+  height: 100%;
+}
+.project-card-settings {
+  position: absolute;
+  top: 11px;
+  right: 11px;
+  z-index: 3;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid #ffffff57;
+  border-radius: 8px;
+  background: rgb(20 34 25 / 72%);
+  color: #fff;
+  cursor: pointer;
+  backdrop-filter: blur(7px);
+  transition: background 160ms ease, transform 160ms ease;
+}
+.project-card-settings:hover {
+  background: var(--green);
+  transform: translateY(-1px);
+}
+.project-card-settings:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}

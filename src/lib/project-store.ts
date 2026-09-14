@@ -44,6 +44,7 @@ export async function loadAccountProject(
         .select("project_id,reference_image_id")
         .eq("owner_id", ownerId).eq("project_id", projectId),
     ]);
+  const assetsResult = await client.from("comfyTR_clip_video_assets").select("id,clip_id,storage_path").eq("owner_id", ownerId).eq("project_id", projectId).eq("state", "active");
   const clipIds = (clipsResult.data ?? []).map((clip) => clip.id);
   const versionsResult = clipIds.length ? await client.from(PROMPT_VERSION_TABLE)
     .select("*").eq("owner_id", ownerId).in("clip_id", clipIds).order("version") : { data: [], error: null };
@@ -60,10 +61,11 @@ export async function loadAccountProject(
     const id = String(version.clip_id);
     versionsByClip.set(id, [...(versionsByClip.get(id) ?? []), version]);
   }
+  const assetsByClip = new Map<string, { id: string; clip_id: string; storage_path: string }>((assetsResult.data ?? []).map((asset: { id: string; clip_id: string; storage_path: string }) => [String(asset.clip_id), { id: String(asset.id), clip_id: String(asset.clip_id), storage_path: String(asset.storage_path) }]));
   const clipsByProject = new Map<string, Clip[]>();
   for (const row of (clipsResult.data ?? []) as Row[]) {
     const videoStoragePath = row.video_url ? String(row.video_url) : "";
-    const signedVideo = videoStoragePath
+    const signedVideo = videoStoragePath && !assetsByClip.has(String(row.id))
       ? await client.storage
           .from(GENERATED_VIDEO_BUCKET)
           .createSignedUrl(videoStoragePath, 3600)
@@ -73,6 +75,7 @@ export async function loadAccountProject(
       title: String(row.title),
       description: String(row.description ?? ""),
       duration: Number(row.duration),
+      renderPreset: row.render_preset === "quick" ? "quick" : "cinematic",
       referenceIds: (row.reference_ids as string[]) ?? [],
       suggestedReferences: (row.suggested_references as Clip["suggestedReferences"]) ?? [],
       status: row.status as Clip["status"],
@@ -81,6 +84,7 @@ export async function loadAccountProject(
       // the previous one, which is how the project already behaved.
       continuesPrevious: row.continues_previous !== false,
       ...(videoStoragePath ? { videoStoragePath } : {}),
+      ...(videoStoragePath.startsWith("comfytr-cache/") && assetsByClip.has(String(row.id)) ? { videoAssetId: assetsByClip.get(String(row.id))!.id } : {}),
       ...(signedVideo?.data?.signedUrl
         ? { videoUrl: signedVideo.data.signedUrl }
         : {}),
@@ -183,6 +187,7 @@ export async function saveAccountProject(
         title: clip.title,
         description: clip.description,
         duration: clip.duration,
+        render_preset: clip.renderPreset ?? "cinematic",
         reference_ids: clip.referenceIds,
         suggested_references: clip.suggestedReferences ?? [],
         status: clip.status,

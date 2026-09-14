@@ -7,6 +7,7 @@ import {
   canChangeProjectSettings,
   newProject,
   newClip,
+  duplicateProjectAsDraft,
 } from "../src/lib/studio-model.ts";
 
 test("validated clips reject description, reference, duration and status changes", () => {
@@ -79,4 +80,38 @@ test("new projects and clips are empty drafts, never fabricated AI results", () 
   assert.equal(clip.description, "");
   assert.equal(clip.videoUrl, undefined);
   assert.equal(clip.status, "draft");
+});
+test("a new project version preserves the plan but removes every generated result", () => {
+  const original = createSampleProject();
+  original.clips[0] = {
+    ...original.clips[0],
+    videoUrl: "https://example.test/clip.mp4",
+    videoStoragePath: "owner/project/clip.mp4",
+    technicalPrompt: "Original H3 prompt",
+    responseId: "resp_123",
+    revision: 4,
+    promptHistory: [{
+      description: "Earlier draft",
+      technicalPrompt: "Earlier H3 prompt",
+      referenceIds: ["ref-forest"],
+      duration: 5,
+      savedAt: "2026-09-13T00:00:00.000Z",
+    }],
+  };
+
+  const copy = duplicateProjectAsDraft(original);
+  assert.notEqual(copy.id, original.id);
+  assert.equal(copy.title, "Where the forest remembers — new version");
+  assert.deepEqual(copy.referenceIds, original.referenceIds);
+  assert.equal(copy.clips.length, original.clips.length);
+  assert.notEqual(copy.clips[0].id, original.clips[0].id);
+  assert.equal(copy.clips[0].status, "draft");
+  assert.equal(copy.clips[0].technicalPrompt, "Original H3 prompt");
+  assert.equal(copy.clips[0].videoUrl, undefined);
+  assert.equal(copy.clips[0].videoStoragePath, undefined);
+  assert.equal(copy.clips[0].responseId, undefined);
+  assert.equal(copy.clips[0].revision, undefined);
+  assert.equal(copy.clips[0].promptHistory, undefined);
+  assert.equal(original.clips[0].status, "validated");
+  assert.equal(original.clips[0].videoUrl, "https://example.test/clip.mp4");
 });
