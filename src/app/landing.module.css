@@ -176,13 +176,27 @@
   aspect-ratio: 9/11;
   max-height: 480px;
   position: relative;
+  isolation: isolate;
   overflow: hidden;
   border-radius: 14px;
   background: linear-gradient(145deg, #12241e, #6c3c28 55%, #e48b4a);
   border: 1px solid #ffffff42;
 }
+.heroFrameImage {
+  z-index: 0;
+  object-fit: cover;
+  object-position: 78% 76%;
+  filter: saturate(0.8) contrast(1.08) brightness(0.66);
+}
+.heroFrameOverlay {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background: linear-gradient(180deg, rgb(12 23 19 / 12%) 10%, rgb(27 12 6 / 35%) 58%, rgb(23 11 6 / 72%) 100%);
+}
 .sceneGlow {
   position: absolute;
+  z-index: 1;
   width: 58%;
   height: 50%;
   border-radius: 50%;
@@ -193,6 +207,7 @@
 }
 .frameNumber {
   position: absolute;
+  z-index: 2;
   top: 18px;
   right: 20px;
   color: #fff8;
@@ -200,6 +215,7 @@
 }
 .sceneText {
   position: absolute;
+  z-index: 2;
   left: 27px;
   bottom: 28px;
   color: white;
@@ -798,10 +814,8 @@
   align-items: flex-end;
   padding: 13px;
   border-radius: 14px;
-  background-image:
-    linear-gradient(0deg, #081512b3 0%, transparent 52%),
-    url("/clipweave-reference-result.png");
-  background-size: 200% 200%;
+  background-size: cover;
+  background-repeat: no-repeat;
   box-shadow: 0 18px 35px #1b251a33;
 }
 .referenceWall > .referencePhoto span {
@@ -826,7 +840,8 @@
   top: 24px;
   width: 34%;
   height: 29%;
-  background-position: 0 0;
+  background-image: linear-gradient(0deg, #081512b3 0%, transparent 52%), url("/landing/ada-cartoon.webp");
+  background-position: center 28%;
 }
 .referenceWall > .refTwo {
   inset: auto;
@@ -834,7 +849,8 @@
   top: 35%;
   width: 34%;
   height: 29%;
-  background-position: 100% 0;
+  background-image: linear-gradient(0deg, #081512b3 0%, transparent 52%), url("/landing/lagos-cartoon.webp");
+  background-position: center;
 }
 .referenceWall > .refThree {
   inset: auto;
@@ -842,12 +858,14 @@
   bottom: 24px;
   width: 34%;
   height: 29%;
-  background-position: 0 100%;
+  background-image: linear-gradient(0deg, #081512b3 0%, transparent 52%), url("/landing/car-cartoon.webp");
+  background-position: center;
 }
 .referenceWall > .refResult {
   inset: 24px 24px 24px auto;
   width: 56%;
-  background-position: 100% 100%;
+  background-image: linear-gradient(0deg, #081512b3 0%, transparent 52%), url("/landing/cinematic-result-cartoon.webp");
+  background-position: center;
 }
 .referenceWall > .refResult span {
   background: var(--lime);

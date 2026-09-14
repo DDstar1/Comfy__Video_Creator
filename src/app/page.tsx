@@ -58,6 +58,15 @@ export default function Home() {
           aria-label="An illustrated ClipWeave clip sequence"
         >
           <div className={styles.filmFrame}>
+            <Image
+              className={styles.heroFrameImage}
+              src="/landing/cinematic-result-cartoon.webp"
+              alt="A cinematic Lagos night frame created from character, location, and car references"
+              fill
+              sizes="(max-width: 620px) 82vw, 520px"
+              priority
+            />
+            <span className={styles.heroFrameOverlay} aria-hidden="true" />
             <div className={styles.sceneGlow} />
             <span className={styles.frameNumber}>01</span>
             <div className={styles.sceneText}>
