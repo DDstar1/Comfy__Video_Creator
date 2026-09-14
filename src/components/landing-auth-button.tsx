@@ -11,10 +11,12 @@ export default function LandingAuthButton({
   children,
   className,
   mode = "signup",
+  hideWhenSignedIn = false,
 }: {
   children: ReactNode;
   className?: string;
   mode?: "signin" | "signup";
+  hideWhenSignedIn?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -34,6 +36,8 @@ export default function LandingAuthButton({
       data.subscription.unsubscribe();
     };
   }, []);
+
+  if (user && hideWhenSignedIn) return null;
 
   return (
     <>

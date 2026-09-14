@@ -58,43 +58,45 @@ export default function Home() {
           className={styles.heroVisual}
           aria-label="An illustrated ClipWeave clip sequence"
         >
-          <div className={styles.filmFrame}>
-            <Image
-              className={styles.heroFrameImage}
-              src="/landing/cinematic-result-cartoon.webp"
-              alt="A cinematic Lagos night frame created from character, location, and car references"
-              fill
-              sizes="(max-width: 620px) 82vw, 520px"
-              priority
-            />
-            <span className={styles.heroFrameOverlay} aria-hidden="true" />
-            <div className={styles.sceneGlow} />
-            <span className={styles.frameNumber}>01</span>
-            <div className={styles.sceneText}>
-              <small>YOUR STORY</small>
-              <strong>
-                A quiet street.
-                <br />
-                One impossible light.
-              </strong>
-            </div>
-          </div>
-          <div className={styles.timeline}>
-            {["Scene", "References", "Clips", "Video"].map((item, index) => (
-              <div key={item} className={index === 2 ? styles.activeStep : ""}>
-                <span>{index + 1}</span>
-                {item}
+          <div className={styles.heroVisualInner}>
+            <div className={styles.filmFrame}>
+              <Image
+                className={styles.heroFrameImage}
+                src="/landing/cinematic-result-cartoon.webp"
+                alt="A cinematic Lagos night frame created from character, location, and car references"
+                fill
+                sizes="(max-width: 620px) 82vw, 520px"
+                priority
+              />
+              <span className={styles.heroFrameOverlay} aria-hidden="true" />
+              <div className={styles.sceneGlow} />
+              <span className={styles.frameNumber}>01</span>
+              <div className={styles.sceneText}>
+                <small>YOUR STORY</small>
+                <strong>
+                  A quiet street.
+                  <br />
+                  One impossible light.
+                </strong>
               </div>
-            ))}
-          </div>
-          <div className={styles.promptCard}>
-            <Sparkles size={17} />
-            <div>
-              <small>CLIPWEAVE DIRECTOR</small>
-              <p>
-                “Keep Ada’s face and red headwrap consistent as the camera
-                moves…”
-              </p>
+            </div>
+            <div className={styles.timeline}>
+              {["Scene", "References", "Clips", "Video"].map((item, index) => (
+                <div key={item} className={index === 2 ? styles.activeStep : ""}>
+                  <span>{index + 1}</span>
+                  {item}
+                </div>
+              ))}
+            </div>
+            <div className={styles.promptCard}>
+              <Sparkles size={17} />
+              <div>
+                <small>CLIPWEAVE DIRECTOR</small>
+                <p>
+                  “Keep Ada’s face and red headwrap consistent as the camera
+                  moves…”
+                </p>
+              </div>
             </div>
           </div>
         </div>

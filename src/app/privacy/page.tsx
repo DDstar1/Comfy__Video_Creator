@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import PolicyPage from "../policy-page";
-import styles from "../policy.module.css";
 export const metadata: Metadata = {
   title: "Privacy Policy | ClipWeave",
   description:
@@ -117,7 +116,7 @@ export default function PrivacyPage() {
       </section>
       <section>
         <h2>Retention and deletion</h2>
-        <p className={styles.placeholder}>
+        <p className="rounded border-l-[3px] border-[#476149] bg-[#e6ebda] px-5 py-4">
           [PLACEHOLDER: Specify retention periods and deletion practices for
           accounts, projects, reference images, generated videos, render caches,
           logs, backups, support messages, and payment records.]

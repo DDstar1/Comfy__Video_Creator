@@ -20,7 +20,6 @@ export const metadata: Metadata = {
   title: "ClipWeave — Turn your story into a cinematic video",
   description:
     "Create three-minute cinematic story videos from ₦1,500. Join the Nigerian early-access launch for ClipWeave.",
-  icons: { icon: "/brand/clipweave-mark.png", apple: "/brand/clipweave-mark.png" },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

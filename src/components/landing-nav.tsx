@@ -29,7 +29,7 @@ export default function LandingNav() {
       <div className={styles.navActions}>
         <a href="#how-it-works">How it works</a>
         <a href="#waitlist">Join waitlist</a>
-        <LandingAuthButton mode="signin" className={styles.navSignIn}>Sign in</LandingAuthButton>
+        <LandingAuthButton mode="signin" hideWhenSignedIn className={styles.navSignIn}>Sign in</LandingAuthButton>
         <LandingAuthButton className={styles.navCta}>Create account</LandingAuthButton>
       </div>
 
@@ -48,11 +48,10 @@ export default function LandingNav() {
         <div className={styles.mobileMenu} id="landing-mobile-menu">
           <a href="#how-it-works" onClick={() => setOpen(false)}>How it works</a>
           <a href="#waitlist" onClick={() => setOpen(false)}>Join the waitlist</a>
-          <LandingAuthButton mode="signin" className={styles.mobileSignIn}>Sign in</LandingAuthButton>
+          <LandingAuthButton mode="signin" hideWhenSignedIn className={styles.mobileSignIn}>Sign in</LandingAuthButton>
           <LandingAuthButton className={styles.mobileCreate}>Create account</LandingAuthButton>
         </div>
       )}
     </nav>
   );
 }
-

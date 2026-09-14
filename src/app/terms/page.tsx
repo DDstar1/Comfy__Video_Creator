@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import PolicyPage from "../policy-page";
-import styles from "../policy.module.css";
 export const metadata: Metadata = {
   title: "Terms of Service | ClipWeave",
   description: "Terms for using ClipWeave's AI video creation service.",
@@ -68,7 +67,7 @@ export default function TermsPage() {
           processes payments. Credits are used for platform services and are not
           represented as a bank deposit or investment.
         </p>
-        <p className={styles.placeholder}>
+        <p className="rounded border-l-[3px] border-[#476149] bg-[#e6ebda] px-5 py-4">
           [PLACEHOLDER: Specify refund eligibility, request deadlines and
           process, treatment of unused credits, failed or cancelled generations,
           and account termination balances, subject to mandatory consumer
@@ -111,7 +110,7 @@ export default function TermsPage() {
       </section>
       <section>
         <h2>Governing law and disputes</h2>
-        <p className={styles.placeholder}>
+        <p className="rounded border-l-[3px] border-[#476149] bg-[#e6ebda] px-5 py-4">
           [PLACEHOLDER: Specify governing law, jurisdiction, and any
           dispute-resolution process, preserving mandatory consumer rights.]
         </p>
