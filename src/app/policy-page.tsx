@@ -24,8 +24,8 @@ export default function PolicyPage({
         </p>
         <h1>{title}</h1>
         <aside className="rounded border-l-[3px] border-[#476149] bg-[#e6ebda] px-5 py-4">
-          Owner review required: clearly marked placeholders below must be
-          completed before these policies are treated as final.
+          ClipWeave is operated by DTECH SOFTWARE LAB ENTERPRISE, a Nigerian
+          sole proprietorship registered under BN 9517824.
         </aside>
         {children}
         <section>
@@ -36,11 +36,19 @@ export default function PolicyPage({
           </p>
           <p>
             ClipWeave is a product operated by DTECH SOFTWARE LAB ENTERPRISE,
-            a business registered in Nigeria.
+            a Nigerian sole proprietorship registered on 3 May 2026 under
+            Business Name Registration No. 9517824.
           </p>
-          <p className="rounded border-l-[3px] border-[#476149] bg-[#e6ebda] px-5 py-4">
-            [PLACEHOLDER: Add the registered business address before these
-            policies are treated as final.]
+          <p>
+            <strong>Principal place of business:</strong> Idialu Street, off
+            Ukuhn Road, Eguare, Ekpoma, Edo State, Nigeria.
+          </p>
+          <p>
+            <strong>Registered business email:</strong>{" "}
+            <a href="mailto:oseremendestiny77@gmail.com">
+              oseremendestiny77@gmail.com
+            </a>
+            .
           </p>
         </section>
       </main>
