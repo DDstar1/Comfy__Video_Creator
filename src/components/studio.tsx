@@ -84,14 +84,18 @@ type Route = StudioRoute;
 
 type ClipTransition = { direction: 1 | -1; mobile: boolean; distance: number };
 const clipDetailVariants = {
-  initial: ({ direction, mobile, distance }: ClipTransition) => ({
+  initial: (transition: ClipTransition = { direction: 1, mobile: false, distance: 0 }) => ({
     opacity: 0,
-    ...(mobile ? { x: direction * distance } : { y: direction * distance }),
+    ...(transition.mobile
+      ? { x: transition.direction * transition.distance }
+      : { y: transition.direction * transition.distance }),
   }),
   visible: { opacity: 1, x: 0, y: 0 },
-  exit: ({ direction, mobile, distance }: ClipTransition) => ({
+  exit: (transition: ClipTransition = { direction: 1, mobile: false, distance: 0 }) => ({
     opacity: 0,
-    ...(mobile ? { x: -direction * distance } : { y: -direction * distance }),
+    ...(transition.mobile
+      ? { x: -transition.direction * transition.distance }
+      : { y: -transition.direction * transition.distance }),
   }),
 };
 
@@ -1528,6 +1532,11 @@ function Workspace({
                           {clip && (
                             <motion.div
                               key={clip.id}
+                              custom={{
+                                direction: clipTransitionDirection,
+                                mobile: isMobile,
+                                distance: reduceMotion ? 0 : 24,
+                              }}
                               variants={clipDetailVariants}
                               initial="initial"
                               animate="visible"
@@ -2378,10 +2387,8 @@ function ClipEditor({
     <article className="clip-editor panel">
       <div className="editor-heading">
         <div>
-          <span className="eyebrow">
-            CLIP {String(index + 1).padStart(2, "0")}{" "}
-            <span className="eyebrow-divider">/</span>{" "}
-            {String(project.clips.length).padStart(2, "0")}
+          <span className="eyebrow clip-position">
+            CLIP {index + 1}/{project.clips.length}
           </span>
           <h3>{clip.title}</h3>
         </div>

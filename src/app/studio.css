@@ -1034,6 +1034,9 @@ img {
   padding: 0 5px;
   color: #a7b497;
 }
+.clip-position {
+  white-space: nowrap;
+}
 .editor-heading h3 {
   font-size: 17px;
   font-weight: 550;
