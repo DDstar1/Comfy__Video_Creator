@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowDownToLine,
   ArrowLeft,
@@ -81,6 +82,19 @@ type Dialog =
   "new" | "auth" | "upload" | "help" | "settings" | "account" | "validate" | "regenerate" | "wallet" | "delete" | null;
 type Route = StudioRoute;
 
+type ClipTransition = { direction: 1 | -1; mobile: boolean; distance: number };
+const clipDetailVariants = {
+  initial: ({ direction, mobile, distance }: ClipTransition) => ({
+    opacity: 0,
+    ...(mobile ? { x: direction * distance } : { y: direction * distance }),
+  }),
+  visible: { opacity: 1, x: 0, y: 0 },
+  exit: ({ direction, mobile, distance }: ClipTransition) => ({
+    opacity: 0,
+    ...(mobile ? { x: -direction * distance } : { y: -direction * distance }),
+  }),
+};
+
 export default function Studio({ initialRoute = { view: "projects" } }: { initialRoute?: Route }) {
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
@@ -126,6 +140,7 @@ function Workspace({
   // re-ran and replaced local state with the database, discarding edits that
   // had not finished saving. Key them on the stable id instead.
   const userId = user?.id ?? null;
+  const reduceMotion = useReducedMotion();
   const [projects, setProjects] = useState<Project[]>([createSampleProject()]);
   const [summaries, setSummaries] = useState<ProjectSummary[]>([]);
   const [route, setRoute] = useState<Route>(initialRoute);
@@ -133,6 +148,7 @@ function Workspace({
   const [projectError, setProjectError] = useState("");
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [clipId, setClipId] = useState("clip-2");
+  const [clipTransitionDirection, setClipTransitionDirection] = useState<1 | -1>(1);
   const [references, setReferences] =
     useState<ReferenceImage[]>(sampleReferences);
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -387,6 +403,18 @@ function Workspace({
     project?.clips.find((c) => c.status !== "validated") ??
     project?.clips[0];
   const tab = route.tab ?? "clips";
+  function selectClip(nextId: string) {
+    if (!project || !clip || nextId === clip.id) {
+      setClipId(nextId);
+      return;
+    }
+    const currentIndex = project.clips.findIndex((item) => item.id === clip.id);
+    const nextIndex = project.clips.findIndex((item) => item.id === nextId);
+    if (nextIndex >= 0 && currentIndex >= 0) {
+      setClipTransitionDirection(nextIndex > currentIndex ? 1 : -1);
+    }
+    setClipId(nextId);
+  }
   function navigate(next: Route) {
     window.history.pushState(null, "", studioUrl(next));
     setRoute(next);
@@ -1421,7 +1449,7 @@ function Workspace({
                                           key={c.id}
                                           className={`clip-card ${clip?.id === c.id ? "selected" : ""} ${isRendering(c.id) ? "generating" : ""}`}
                                           aria-busy={isRendering(c.id)}
-                                          onClick={() => setClipId(c.id)}
+                                          onClick={() => selectClip(c.id)}
                                           aria-pressed={clip?.id === c.id}
                                         >
                                           <div className="clip-thumb">
@@ -1488,46 +1516,65 @@ function Workspace({
                             </p>
                           </div>
                         </div>
-                        {clip && (
-                          <ClipEditor
-                            key={`${clip.id}:${clip.revision ?? 0}`}
-                            project={project}
-                            clip={clip}
-                            references={references}
-                            onResolveReference={resolveReference}
-                            onUploadReference={(suggestion) => {
-                              setReferenceSuggestion(suggestion);
-                              setDialog(user ? "upload" : "auth");
-                            }}
-                            onChange={(patch) =>
-                              saveProject(updateClip(project, clip.id, patch))
-                            }
-                            onChangeContinuity={() =>
-                              saveProject(
-                                setClipContinuity(project, clip.id, clip.continuesPrevious === false),
-                              )
-                            }
-                            onMention={showMention}
-                            onCompile={(patch) =>
-                              void askDirector("revise", clip, patch)
-                            }
-                            renderState={renders[clip.id]}
-                            onGenerate={() => void generateClip(clip)}
-                            onRegenerate={() => setDialog("regenerate")}
-                            onRemove={() => removeClip(clip.id)}
-                            onValidate={() => setDialog("validate")}
-                            onNotice={notify}
-                            onNext={() => {
-                              const next =
-                                project.clips[
-                                  project.clips.findIndex(
-                                    (c) => c.id === clip.id,
-                                  ) + 1
-                                ];
-                              if (next) setClipId(next.id);
-                            }}
-                          />
-                        )}
+                        <AnimatePresence
+                          mode="wait"
+                          initial={false}
+                          custom={{
+                            direction: clipTransitionDirection,
+                            mobile: isMobile,
+                            distance: reduceMotion ? 0 : 24,
+                          }}
+                        >
+                          {clip && (
+                            <motion.div
+                              key={clip.id}
+                              variants={clipDetailVariants}
+                              initial="initial"
+                              animate="visible"
+                              exit="exit"
+                              transition={{ duration: reduceMotion ? 0 : 0.2, ease: "easeOut" }}
+                            >
+                              <ClipEditor
+                                key={`${clip.id}:${clip.revision ?? 0}`}
+                                project={project}
+                                clip={clip}
+                                references={references}
+                                onResolveReference={resolveReference}
+                                onUploadReference={(suggestion) => {
+                                  setReferenceSuggestion(suggestion);
+                                  setDialog(user ? "upload" : "auth");
+                                }}
+                                onChange={(patch) =>
+                                  saveProject(updateClip(project, clip.id, patch))
+                                }
+                                onChangeContinuity={() =>
+                                  saveProject(
+                                    setClipContinuity(project, clip.id, clip.continuesPrevious === false),
+                                  )
+                                }
+                                onMention={showMention}
+                                onCompile={(patch) =>
+                                  void askDirector("revise", clip, patch)
+                                }
+                                renderState={renders[clip.id]}
+                                onGenerate={() => void generateClip(clip)}
+                                onRegenerate={() => setDialog("regenerate")}
+                                onRemove={() => removeClip(clip.id)}
+                                onValidate={() => setDialog("validate")}
+                                onNotice={notify}
+                                onNext={() => {
+                                  const next =
+                                    project.clips[
+                                      project.clips.findIndex(
+                                        (c) => c.id === clip.id,
+                                      ) + 1
+                                  ];
+                                  if (next) selectClip(next.id);
+                                }}
+                              />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                     ) : (
                       <div className="empty-state panel">

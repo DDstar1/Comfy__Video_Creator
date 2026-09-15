@@ -17,12 +17,12 @@ export default function PrivacyPage() {
         <h2>Information we collect</h2>
         <ul>
           <li>
-            <strong>Account information:</strong> Supabase Auth manages
-            email/password sign-in and Google OAuth. This includes your email,
-            account identifier, authentication/session information, and profile
-            details such as your name and avatar supplied during registration or
-            by Google. Password authentication is handled by Supabase; Google
-            sign-in does not give ClipWeave your Google password.
+            <strong>Account information:</strong> our authentication service
+            manages email/password sign-in and Google sign-in. This includes
+            your email, account identifier, authentication/session information,
+            and profile details such as your name and avatar supplied during
+            registration or by Google. Google sign-in does not give ClipWeave
+            your Google password.
           </li>
           <li>
             <strong>Creative content:</strong> uploaded reference images and
@@ -55,13 +55,12 @@ export default function PrivacyPage() {
       <section>
         <h2>Reference images are publicly accessible</h2>
         <p>
-          Account reference images are stored in a{" "}
-          <strong>public Supabase Storage bucket</strong>. Anyone with an image
-          URL can view or download it without signing in. Account ownership
-          controls do not make the image bytes private. Do not upload
-          confidential images or images you lack permission to share this way.
-          Public copies downloaded by others cannot be recalled by deleting the
-          original.
+          Account reference images are stored in <strong>publicly accessible
+          storage</strong>. Anyone with an image URL can view or download it
+          without signing in. Account ownership controls do not make the image
+          bytes private. Do not upload confidential images or images you lack
+          permission to share this way. Public copies downloaded by others
+          cannot be recalled by deleting the original.
         </p>
         <p>
           Generated videos and merged exports are stored in a private bucket.
@@ -72,55 +71,68 @@ export default function PrivacyPage() {
       </section>
       <section>
         <h2>Service providers and data sharing</h2>
+        <p>
+          We use carefully selected service providers to operate ClipWeave. They
+          process information only as needed to provide the service, protect it,
+          and comply with applicable obligations.
+        </p>
         <ul>
           <li>
-            <strong>Supabase:</strong> authentication, account/project database,
-            and image/video storage.
+            <strong>Account, cloud, and storage providers:</strong> authenticate
+            users and store account, project, reference-image, and video data.
           </li>
           <li>
-            <strong>OpenAI:</strong> our AI planning backend receives story
-            text, prompts, and relevant reference data to plan clips and process
-            revisions.
+            <strong>AI and rendering providers:</strong> process the story text,
+            prompts, and reference data needed to plan and generate the videos
+            you request.
           </li>
           <li>
-            <strong>RunPod:</strong> GPU rendering receives workflows, prompts,
-            and reference data/images to generate videos. Rendering files and
-            continuity caches may also be stored on its network volume.
-          </li>
-          <li>
-            <strong>Creem:</strong> processes payments and checkout information.
-            ClipWeave receives transaction information needed to credit your
-            wallet and reconcile payments. Payment details submitted at checkout
-            are handled by Creem under its own privacy policy.
+            <strong>Payment providers:</strong> process checkout payments and
+            provide transaction information needed to add credits and reconcile
+            purchases. Payment details are handled under the payment provider’s
+            own privacy policy.
           </li>
         </ul>
         <p>
-          OpenAI and RunPod act as service providers/sub-processors for the
-          story and reference data required by these features. Processing may
-          occur outside your country. Provider policies also govern their
-          handling of data. We may disclose information when required by
-          applicable law or to address abuse and protect users.
-        </p>
-        <p>
-          Provider information:{" "}
-          <a href="https://supabase.com/privacy">Supabase privacy</a>,{" "}
-          <a href="https://openai.com/policies/privacy-policy/">
-            OpenAI privacy
-          </a>
-          ,{" "}
-          <a href="https://www.runpod.io/legal/privacy-policy">
-            RunPod privacy
-          </a>
-          , and <a href="https://www.creem.io/privacy">Creem privacy</a>.
+          These providers may process information outside your country. We may
+          also disclose information where required by law or to investigate
+          misuse and protect users, our service, and the public.
         </p>
       </section>
       <section>
         <h2>Retention and deletion</h2>
-        <p className="rounded border-l-[3px] border-[#476149] bg-[#e6ebda] px-5 py-4">
-          [PLACEHOLDER: Specify retention periods and deletion practices for
-          accounts, projects, reference images, generated videos, render caches,
-          logs, backups, support messages, and payment records.]
+        <p>
+          We keep account information, projects, reference images, and generated
+          videos while your account remains active, unless we no longer need the
+          information to provide ClipWeave. When you delete content or close an
+          account, we aim to remove the active copy from our systems within 30
+          days, subject to the exceptions below.
         </p>
+        <ul>
+          <li>
+            <strong>Rendering caches and temporary files:</strong> we retain
+            motion-context caches and temporary rendering files for up to 30
+            days of inactivity. Regenerating a clip removes dependent cache
+            segments and videos that are no longer part of the active sequence.
+          </li>
+          <li>
+            <strong>Backups:</strong> deleted data may remain in backup copies
+            for up to 90 days before those copies are overwritten or expire.
+          </li>
+          <li>
+            <strong>Service logs:</strong> we retain routine operational and
+            security logs for up to 90 days.
+          </li>
+          <li>
+            <strong>Support messages:</strong> we retain support requests for
+            up to 12 months after the request is resolved.
+          </li>
+          <li>
+            <strong>Payment and transaction records:</strong> we retain these
+            records for up to seven years where needed for accounting, tax,
+            fraud prevention, dispute handling, or legal obligations.
+          </li>
+        </ul>
         <p>
           Contact support to request access, correction, or deletion of your
           information. We may need to verify account ownership. Available rights

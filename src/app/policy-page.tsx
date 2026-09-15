@@ -39,17 +39,6 @@ export default function PolicyPage({
             a Nigerian sole proprietorship registered on 3 May 2026 under
             Business Name Registration No. 9517824.
           </p>
-          <p>
-            <strong>Principal place of business:</strong> Idialu Street, off
-            Ukuhn Road, Eguare, Ekpoma, Edo State, Nigeria.
-          </p>
-          <p>
-            <strong>Registered business email:</strong>{" "}
-            <a href="mailto:oseremendestiny77@gmail.com">
-              oseremendestiny77@gmail.com
-            </a>
-            .
-          </p>
         </section>
       </main>
       <footer className="mx-auto max-w-7xl border-t border-[#d8dfcf] px-6 py-6">

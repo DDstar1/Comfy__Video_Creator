@@ -63,15 +63,22 @@ export default function TermsPage() {
         <h2>Credits, payments, and refunds</h2>
         <p>
           ClipWeave uses prepaid credits for video generation. Review the price
-          and credit information shown before purchase or generation. Creem
-          processes payments. Credits are used for platform services and are not
-          represented as a bank deposit or investment.
+          and credit information shown before purchase or generation. Our payment
+          providers process payments. Credits are used for platform services and
+          are not represented as a bank deposit or investment.
         </p>
-        <p className="rounded border-l-[3px] border-[#476149] bg-[#e6ebda] px-5 py-4">
-          [PLACEHOLDER: Specify refund eligibility, request deadlines and
-          process, treatment of unused credits, failed or cancelled generations,
-          and account termination balances, subject to mandatory consumer
-          rights.]
+        <p>
+          All credit purchases are final. Credits, including unused credits, are
+          non-refundable, non-transferable, and cannot be redeemed for cash. If
+          you close your account, unused credits are not refundable.
+        </p>
+        <p>
+          If you believe a transaction was recorded in error, contact support
+          with the relevant project or transaction details so we can investigate.
+        </p>
+        <p>
+          Nothing in this section limits any consumer right that cannot lawfully
+          be excluded under applicable law.
         </p>
       </section>
       <section>
