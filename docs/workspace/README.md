@@ -40,6 +40,51 @@ without desyncing the overlay's line-wrapping from the real textarea's.
 README for the full account. TypeScript and targeted ESLint passed; no paid
 provider request was needed.
 
+**Later the same day — Creem removed, Korapay added.** Creem is deleted
+entirely (`frontend/src/app/api/payments/creem/` and its `checkoutCreem` UI
+path), replaced by Korapay Standard Checkout: a client-initiated flow
+(`window.Korapay.initialize()`) via new `frontend/src/app/api/payments/korapay/
+route.ts` and `.../korapay/webhook/route.ts`. The webhook verifies Korapay's
+HMAC-SHA256 signature over the `data` object and credits the wallet through a
+new `comfyTR_credit_payment(uuid, text, jsonb)` overload that records the raw
+NGN payload for audit, since there's no shared currency to cross-check against
+the wallet's USD cents. Migration
+[20260916000001_comfyTR_korapay_payments.sql](../../../supabase/migrations/20260916000001_comfyTR_korapay_payments.sql)
+is written but **not applied** to the linked database yet, and no sandbox
+`KORAPAY_*` keys exist in any env file. The amount-unit assumption (major
+units, not kobo) is inferred from Korapay's example payloads, not confirmed —
+verify against a real sandbox charge before trusting it in production.
+
+Confirmed from Korapay's docs, not built: **USD collection via Virtual Bank
+Accounts** and **USDT/USDC stablecoin collection** (SOL/ETH/TRX networks via a
+Customer Wallet API; settlement currency unconfirmed). Also raised, not
+decided: switching the wallet from USD-cents to a "1 NGN = 1 token" model,
+which would require changing `comfyTR_wallets`' hard `currency = 'USD'`
+constraint — a real schema change, pending the user's decision. See
+`frontend/README.md` for the full account.
+
+**Later still.** Korapay env vars split into `_TEST`/`_LIVE` pairs; which is
+active is a database row (`comfyTR_payment_settings.korapay_mode`) an owner
+flips from `/admin`, not an env var — migration
+[20260916000002_comfyTR_payment_mode.sql](../../../supabase/migrations/20260916000002_comfyTR_payment_mode.sql)
+adds that table and a per-transaction `payment_mode` column the webhook
+verifies against. **Both Korapay migrations are now applied** to the linked
+database, confirmed via `supabase migration list --linked`. A real bug was
+found and fixed: checkout showed a generic "Checkout could not be started."
+because Supabase's `PostgrestError` isn't a JavaScript `Error` instance, so
+`error instanceof Error` missed it and hid the real cause — exactly what
+happened before this migration was applied. Fixed with an `errorMessage()`
+helper that also reads a plain object's `.message`. No sandbox/live Korapay
+keys exist yet, so checkout still cannot complete.
+
+**Later still.** Keys were added, but the real blocker was
+`KORAPAY_NGN_PER_USD` still holding the literal placeholder text
+`your_chosen_rate` (`Number(...)` on that is `NaN`). Per request, the static
+rate is retired entirely: `exchange-rate.ts` fetches USD→NGN live from a free
+keyless feed (refreshes once a day, confirmed working) and the route adds a
+flat `KORAPAY_NGN_MARGIN` (₦300 default) on top; a feed outage fails checkout
+closed rather than guessing. `.env` now has `KORAPAY_NGN_MARGIN=300`.
+
 
 ## Current product state — 2026-09-13
 
@@ -255,7 +300,7 @@ production OAuth, a live Creem payment, and the merge job. See the
 | Clip validation | UI/model/API guards plus database immutability and ordered-prefix enforcement, scoped per chain | Verified live; validated clips reject edits and removal; a cut clip validates independently of the scene before it |
 | RunPod worker | Custom H3 Extender image, endpoint `nqpfrj6twlaz5h` pinned to a digest, models resolved via `extra_model_paths`, MP4/MKV responses, `input.merge` and `input.fetch` job types | Rendering and `fetch` verified live for a single-clip chain; **merge never executed against a real multi-clip chain** |
 | Application render pipeline | API workflow assembly (scoped per chain), authenticated RunPod submission, resumable polling, one-active-job project lock (recoverable via `comfyTR_abandon_render`), private video storage with signed previews, and volume-direct render recovery | Verified live for three clips across two chains |
-| Wallet and payments | $5 minimum Creem checkout, USD wallet ledger, render reservation, runtime settlement plus $0.30 margin, and automatic failure refunds | Never exercised on a real charge; all renders so far were owner-exempt or settled at the zero-runtime floor |
+| Wallet and payments | $5 minimum Korapay (NGN card) checkout, USD wallet ledger, render reservation, runtime settlement plus $0.30 margin, and automatic failure refunds. Creem removed. | Korapay migration not yet applied to the linked database; no sandbox keys configured; never exercised on a real charge |
 
 ## Scene cuts and final exports
 
@@ -345,10 +390,11 @@ CHATGPT_KEY=YOUR_OPENAI_API_KEY
 RUNPOD_ENDPOINT_API_KEY=YOUR_RUNPOD_API_KEY
 RUNPOD_ENDPOINT_ID=nqpfrj6twlaz5h
 SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVER_ONLY_SERVICE_ROLE_KEY
-CREEM_API_KEY=YOUR_CREEM_API_KEY
-CREEM_WEBHOOK_SECRET=YOUR_CREEM_WEBHOOK_SECRET
-CREEM_WALLET_PRODUCT_ID=YOUR_ONE_TIME_PRODUCT_ID
-CREEM_TEST_MODE=true
+KORAPAY_PUBLIC_KEY_TEST=YOUR_KORAPAY_TEST_PUBLIC_KEY
+KORAPAY_SECRET_KEY_TEST=YOUR_KORAPAY_TEST_SECRET_KEY
+KORAPAY_PUBLIC_KEY_LIVE=YOUR_KORAPAY_LIVE_PUBLIC_KEY
+KORAPAY_SECRET_KEY_LIVE=YOUR_KORAPAY_LIVE_SECRET_KEY
+KORAPAY_NGN_MARGIN=300
 RUNPOD_GPU_RATE_CENTS_PER_HOUR=58
 CLIPWEAVE_MARGIN_CENTS=30
 ```
@@ -413,7 +459,7 @@ migrations. All application tables use the exact case-sensitive `comfyTR_` prefi
 | `comfyTR_waitlist` | Private emails exposed publicly only through a masked queue RPC |
 | `comfyTR_custom_users` | Private app profiles synchronized automatically from Supabase Auth |
 | `comfyTR_wallets` | Available and reserved USD cents for each account |
-| `comfyTR_payment_transactions` | Idempotent Creem top-up records |
+| `comfyTR_payment_transactions` | Idempotent top-up records; `provider` is `korapay` (current), `flutterwave` or `creem` (historical) |
 | `comfyTR_wallet_ledger` | Immutable top-up, reserve, settlement and refund entries |
 | `comfytr-reference-images` | Public image bucket; JPEG/PNG/WebP, 20 MiB maximum |
 

@@ -10,6 +10,51 @@ type Data = { users: AdminUser[]; generations: Generation[]; summary: ReturnType
   deposits: number; walletLiability: number; trackingConfigured: boolean; runpodRateCentsPerHour: number | null; since: string; until: string };
 const money = (cents: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(cents / 100);
 
+function PaymentModeToggle() {
+  const [mode, setMode] = useState<'test' | 'live' | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(async () => {
+    setError('');
+    try {
+      const session = await supabase?.auth.getSession();
+      const token = session?.data.session?.access_token;
+      if (!token) throw new Error('Sign in with the owner account to see the payment mode.');
+      const response = await fetch('/api/admin/payment-mode', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? 'Payment mode unavailable.');
+      setMode(body.mode);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Payment mode unavailable.'); }
+  }, []);
+  useEffect(() => { queueMicrotask(() => void load()); }, [load]);
+  async function setPaymentMode(next: 'test' | 'live') {
+    if (next === mode || busy) return;
+    if (next === 'live' && !window.confirm('Switch Korapay checkout to LIVE mode? Customers will be charged real money.')) return;
+    setBusy(true); setError('');
+    try {
+      const session = await supabase?.auth.getSession();
+      const token = session?.data.session?.access_token;
+      if (!token) throw new Error('Sign in with the owner account.');
+      const response = await fetch('/api/admin/payment-mode', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ mode: next }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? 'Payment mode update failed.');
+      setMode(body.mode);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Payment mode update failed.'); }
+    finally { setBusy(false); }
+  }
+  return <section className={styles.reliability} aria-label="Korapay payment mode">
+    <span>Korapay checkout mode
+      <strong data-status={mode === 'live' ? 'failed' : 'completed'}> {mode ?? 'Loading...'}</strong>
+    </span>
+    <button disabled={busy || mode === 'test'} onClick={() => void setPaymentMode('test')}>Use test keys</button>
+    <button disabled={busy || mode === 'live'} onClick={() => void setPaymentMode('live')}>Use live keys</button>
+    {error && <span className={styles.warning} role="alert">{error}</span>}
+  </section>;
+}
+
 export function AdminDashboard() {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState('');
@@ -60,6 +105,7 @@ export function AdminDashboard() {
       <label>Period<select value={days} onChange={event => { setDays(event.target.value); setPage(0); }}><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last year</option></select></label>
       <button title="Refresh analytics" aria-label="Refresh analytics" disabled={loading} onClick={() => setRefresh(value => value + 1)}><RefreshCw size={18} /></button>
     </div></div>
+    <PaymentModeToggle />
     <nav className={styles.tabs} aria-label="Analytics views">{['overview', 'users', 'generations'].map(value => <button key={value} aria-current={tab === value ? 'page' : undefined} onClick={() => { setTab(value); setPage(0); }}>{value}</button>)}</nav>
     {loading && <p role="status">Loading analytics...</p>}
     {error && <p className={styles.warning} role="alert">{error}</p>}

@@ -15,6 +15,41 @@ client-side only, no migration, no new table, no changed query. See the root
 README for the full account. Unknown provider costs remain unknown; wallet
 deposits are not revenue.
 
+**Later the same day — Korapay payments migration written, not applied.**
+Creem is removed from the application code (its routes and UI are deleted),
+replaced by Korapay Standard Checkout. Migration
+[20260916000001_comfyTR_korapay_payments.sql](../../../../supabase/migrations/20260916000001_comfyTR_korapay_payments.sql)
+adds `korapay` to `comfyTR_payment_transactions`'s provider check constraint
+(alongside the pre-existing `flutterwave` and the now-unused `creem`, kept in
+the constraint rather than removed since dropping it would force revalidating
+every historical row for no benefit), adds a nullable `provider_metadata`
+jsonb column, adds `paid_currency`/`paid_amount` columns recording what the
+customer was actually charged (e.g. `NGN`, `4128.50`) separately from the
+wallet's own USD-cent `amount_cents` — the two can differ once a currency
+conversion happens, so both sides of the conversion are kept rather than only
+the post-conversion USD figure — and adds a `comfyTR_credit_payment(uuid,
+text, jsonb)` overload that stores a provider's raw confirmation payload
+before crediting. This is needed because Korapay reports NGN while the wallet
+stores USD cents, so unlike the Creem webhook there is no matching currency to
+check the amount against. **This migration has not been pushed**
+(`supabase db push --linked` not run for it). The existing 2-argument
+`comfyTR_credit_payment` used by the Creem webhook is untouched. Also raised,
+not decided: moving the wallet's base currency from USD to NGN (a "1 NGN = 1
+token" model) — would require changing `comfyTR_wallets`'s
+`check (currency = 'USD')` constraint, not just this migration.
+
+**Later still — both applied.**
+[20260916000002_comfyTR_payment_mode.sql](migrations/20260916000002_comfyTR_payment_mode.sql)
+adds `comfyTR_payment_settings` (a singleton row, service-role only, no
+authenticated/anon grant) holding `korapay_mode` (`test`/`live`), switchable
+from `/admin`, plus a `payment_mode` column on `comfyTR_payment_transactions`
+so the webhook verifies each transaction against the secret for the mode it
+was actually checked out under, not whatever the admin toggle currently says.
+**Both `20260916000001` and `20260916000002` are now applied** to this linked
+database — confirmed via `supabase migration list --linked` showing both
+present remotely, pushed with `supabase db push --linked` in this session
+(dry-run first, one migration applied).
+
 
 ## Current database state — 2026-09-13
 
@@ -181,6 +216,15 @@ The applied [20260910000005_comfyTR_wallets.sql](migrations/20260910000005_comfy
 adds prepaid wallets, payment records, the ledger and atomic render accounting.
 The applied [20260911000001_comfyTR_creem_payments.sql](migrations/20260911000001_comfyTR_creem_payments.sql)
 enables the Creem payment provider and updates top-up ledger descriptions.
+Creem's application code has since been removed (see the checkpoint above),
+but this migration is not reverted — the `creem` provider value and its
+historical transaction rows remain valid.
+The applied [20260916000001_comfyTR_korapay_payments.sql](migrations/20260916000001_comfyTR_korapay_payments.sql)
+adds Korapay support the same way, plus `paid_currency`/`paid_amount` columns
+recording what the customer was actually charged before any conversion. The
+applied [20260916000002_comfyTR_payment_mode.sql](migrations/20260916000002_comfyTR_payment_mode.sql)
+adds the owner-switchable test/live `comfyTR_payment_settings` row and a
+per-transaction `payment_mode` column.
 The applied [20260912000001_comfyTR_clip_chains.sql](migrations/20260912000001_comfyTR_clip_chains.sql)
 adds `comfyTR_clips.continues_previous` (default `true`, so existing projects keep
 behaving as one chain from clip 1), the flag that lets a clip cut to a new scene

@@ -64,6 +64,17 @@ rather than by review:
 TypeScript and targeted ESLint passed for all three. No paid provider request
 was needed for any of them.
 
+**Later still — payments.** Creem removed; Korapay Standard Checkout added
+with an owner-switchable test/live mode toggle on `/admin`, backed by a new
+`comfyTR_payment_settings` table. Both Korapay migrations are now applied to
+the linked database. Korapay checkout is outside this test's authorized scope
+(same as Creem was). Sandbox/live `KORAPAY_*` keys are now in `.env`; the
+NGN/USD rate is fetched live rather than read from a static env var, plus a
+flat `KORAPAY_NGN_MARGIN` (₦300). See the root README for the full account,
+including a real bug found and fixed where a non-`Error` Supabase failure was
+silently hidden behind a generic
+"Checkout could not be started." message.
+
 Current product documentation also covers direct project URLs, fixed quality and
 frame settings, suggested-reference resolution, chain-aware rendering, private
 CPU FFmpeg merge exports, and the applied owner analytics migration. Provider

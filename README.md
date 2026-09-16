@@ -125,6 +125,141 @@ position, paste handling, undo/redo) — not attempted.
 
 All of the above: TypeScript and targeted ESLint passed. Not yet committed.
 
+## Later the same day — Creem removed, Korapay added
+
+**Creem is deleted, not just deprioritized.** `src/app/api/payments/creem/`
+(both the checkout and webhook routes) is gone, along with the `checkoutCreem`
+function and its button in `WalletDialog` (`src/components/studio.tsx`).
+
+**Korapay Standard Checkout replaces it.** Unlike Creem's server-created
+checkout session, Korapay's flow is client-initiated: the wallet dialog loads
+Korapay's own script (`loadKorapayScript()`, a module-level cached promise) and
+calls `window.Korapay.initialize()` in the browser. The new routes are:
+
+- `src/app/api/payments/korapay/route.ts` — validates the requested USD amount
+  (same $5–$1000 bounds Creem used), converts it to NGN using a required
+  `KORAPAY_NGN_PER_USD` env var (no default — a wrong guessed rate would
+  silently over/under-charge every customer, so the route refuses to start a
+  checkout without one), inserts a pending `comfyTR_payment_transactions` row
+  recording both the USD `amount_cents` and the actual `paid_currency`/
+  `paid_amount` (`NGN`, the converted figure) the customer will be charged,
+  and returns the reference/amount/public key for the client SDK.
+- `src/app/api/payments/korapay/webhook/route.ts` — verifies Korapay's
+  `x-korapay-signature` header as HMAC-SHA256 over the `data` object only (not
+  the whole payload, unlike Creem's whole-body HMAC), then credits the wallet
+  via a new `comfyTR_credit_payment(uuid, text, jsonb)` overload that first
+  stores the raw payload in a new `provider_metadata` jsonb column. This exists
+  because Korapay reports NGN while the wallet stores USD cents — there's no
+  matching currency to cross-check an exact amount against, so the signature
+  plus a not-already-successful check plus the unique per-transaction
+  reference are what make crediting trustworthy instead.
+- `src/lib/korapay.d.ts` types the `window.Korapay` global Korapay's script
+  injects at runtime.
+
+Migration
+[20260916000001_comfyTR_korapay_payments.sql](../supabase/migrations/20260916000001_comfyTR_korapay_payments.sql)
+adds `korapay` to the provider check constraint, adds `provider_metadata`, and
+adds the 3-arg `comfyTR_credit_payment` overload — **written but not yet
+applied** to the linked database (`supabase db push --linked` not run). No
+`KORAPAY_PUBLIC_KEY`/`KORAPAY_SECRET_KEY`/`KORAPAY_NGN_PER_USD` exist in any
+env file yet, so none of this can be tested live.
+
+**Amount-unit assumption, flagged not confirmed.** Korapay's docs never state
+outright whether Standard Checkout amounts are kobo or major units; cross-
+referencing several of their own example payloads (pre-auth/capture/void/
+refund, values like `"10.00"` and `"3"`) points to major units (whole Naira
+with decimals), and the code assumes that. **Verify against one real sandbox
+charge before going live** — a wrong assumption here is a 100x billing bug in
+either direction.
+
+**Confirmed from Korapay's docs, not built.** Korapay separately supports (1)
+**USD collection via Virtual Bank Accounts** — a dedicated account number per
+customer that they transfer into — and (2) **USDT/USDC stablecoin collection**
+via a Customer Wallet API across SOL/ETH/TRX networks (settlement currency for
+that path wasn't stated in what was fetched). Neither is implemented; both are
+a different integration surface (account/wallet creation APIs, not the
+Standard Checkout script) than what's built here.
+
+**Open pricing-model question, not yet decided or implemented.** Switching the
+wallet from USD-cents to a "1 NGN = 1 token" model — every currency converts
+to NGN, tokens credit 1:1 with NGN — was raised as a simplification (it would
+remove the current double conversion where a USD amount is converted to NGN
+for the Korapay charge, then credited back as USD cents). It's a genuine
+schema change: `comfyTR_wallets.currency` is hard-constrained to `'USD'`
+today. Not implemented pending the business decision.
+
+Verified so far: lint clean; `tsc --noEmit` clean once excluding one stale
+`.next/types/validator.ts` entry that still referenced the deleted Creem route
+files (a build artifact, not a real error — resolves on the next full build).
+Not yet committed; no live Korapay checkout has been exercised.
+
+## Later still — owner-switchable test/live Korapay mode
+
+Env vars are now split into `KORAPAY_PUBLIC_KEY_TEST`/`KORAPAY_SECRET_KEY_TEST`
+and `KORAPAY_PUBLIC_KEY_LIVE`/`KORAPAY_SECRET_KEY_LIVE` instead of one pair.
+Which pair is active is **not** an env var — it's a database row
+(`comfyTR_payment_settings.korapay_mode`, migration
+[20260916000002_comfyTR_payment_mode.sql](../supabase/migrations/20260916000002_comfyTR_payment_mode.sql),
+also unapplied) so the owner can flip it from `/admin` without a redeploy. The
+`/admin` dashboard (`src/components/admin-dashboard.tsx`) has a "Korapay
+checkout mode" toggle gated by the same owner-email check as the rest of
+`/admin`, backed by `GET`/`POST /api/admin/payment-mode`; switching to live
+requires an in-page confirmation since it means real charges. `src/lib/server/
+korapay-config.ts` centralizes reading the current mode and resolving it to a
+key pair.
+
+Each `comfyTR_payment_transactions` row now also records its own
+`payment_mode` at checkout time. The webhook looks this up **per transaction**
+and verifies with that mode's secret, not whatever the toggle currently says —
+otherwise flipping the toggle between a customer's checkout and Korapay's
+webhook call would break signature verification for transactions already in
+flight.
+
+**Both Korapay migrations are now applied** to the linked database
+(`20260916000001_comfyTR_korapay_payments.sql` and
+`20260916000002_comfyTR_payment_mode.sql`), confirmed via
+`supabase migration list --linked` showing both present remotely.
+
+**Real bug found and fixed while verifying this.** Attempting checkout before
+the second migration was applied returned a generic "Checkout could not be
+started." with no indication why. Cause: `admin.from(...).insert()` and
+`getKorapayMode()`'s `.select()` throw a Supabase `PostgrestError` on failure,
+which is a plain object, not a JavaScript `Error` — so the route's
+`error instanceof Error ? error.message : "..."` check silently missed it and
+always fell back to the generic message, exactly when `comfyTR_payment_settings`
+didn't exist yet. Fixed with an `errorMessage()` helper in
+`src/app/api/payments/korapay/route.ts` that also reads a plain object's
+`.message` field, so a real database error now surfaces instead of being
+swallowed.
+
+**Still blocking a real checkout:** no `KORAPAY_PUBLIC_KEY_TEST/LIVE`,
+`KORAPAY_SECRET_KEY_TEST/LIVE`, or `KORAPAY_NGN_PER_USD` exist in any env file
+yet. With the fixed error surfacing, attempting checkout now should return
+"Korapay test checkout is not configured yet." instead of the old generic
+message, once those are added it should proceed to the sandbox modal.
+
+## Later still — dynamic NGN/USD rate instead of a static one
+
+The real blocker turned out to be the static rate itself: `KORAPAY_NGN_PER_USD`
+was still the literal placeholder text `your_chosen_rate` from the README
+template, so `Number(...)` produced `NaN` and checkout refused to start — this
+is exactly the "refuse rather than guess" behavior working as designed, just
+against an unfilled placeholder rather than a real misconfiguration.
+
+Per request, the static rate is now replaced entirely with a live one.
+`src/lib/server/exchange-rate.ts` fetches USD→NGN from
+`https://open.er-api.com/v6/latest/USD` — a free, keyless feed, confirmed live
+to actually return an `NGN` rate — cached in memory for one hour to avoid a
+network call on every checkout. **This feed refreshes once a day, not
+tick-by-tick** (`time_next_update_utc` in its own response is ~24h after
+`time_last_update_utc`), so "dynamic" here means "no hardcoded number," not
+real-time market pricing. The checkout route adds a flat `KORAPAY_NGN_MARGIN`
+(₦300 by default) on top of that live rate rather than a percentage. If the
+feed is unreachable, checkout now fails closed with "Live exchange rate is
+unavailable" instead of guessing a rate — consistent with the existing
+"never silently default a money-affecting rate" rule in this codebase.
+`KORAPAY_NGN_PER_USD` is retired; `.env` now has `KORAPAY_NGN_MARGIN=300`.
+
 
 ## Current product state — 2026-09-13
 
@@ -368,10 +503,10 @@ joined through the existing recovery path, so that case asks a RunPod
 worker to do the join instead. A clip being generated pulses in the sequence
 and its Generate button, so an in-flight render is visible without opening it.
 
-The studio includes a prepaid USD wallet. Creem top-ups start at $5. A render
-reserves $0.59, then settles the RunPod runtime at the configured hourly rate plus
-a $0.30 margin. Submission, generation and video-ingestion failures refund the
-reservation automatically.
+The studio includes a prepaid USD wallet. Korapay (NGN card) top-ups start at
+$5; Creem has been removed. A render reserves $0.59, then settles the RunPod
+runtime at the configured hourly rate plus a $0.30 margin. Submission,
+generation and video-ingestion failures refund the reservation automatically.
 
 ## Legal identity
 
@@ -403,10 +538,11 @@ RUNPOD_S3_STORAGE_API_KEY=YOUR_RUNPOD_S3_SECRET_KEY
 RUNPOD_S3_VOLUME_ID=0oaqjjkos5
 RUNPOD_S3_REGION=EU-RO-1
 SUPABASE_SERVICE_KEY=YOUR_SERVER_ONLY_SERVICE_KEY
-CREEM_API_KEY=YOUR_CREEM_API_KEY
-CREEM_WEBHOOK_SECRET=YOUR_CREEM_WEBHOOK_SECRET
-CREEM_WALLET_PRODUCT_ID=YOUR_ONE_TIME_PRODUCT_ID
-CREEM_TEST_MODE=true
+KORAPAY_PUBLIC_KEY_TEST=YOUR_KORAPAY_TEST_PUBLIC_KEY
+KORAPAY_SECRET_KEY_TEST=YOUR_KORAPAY_TEST_SECRET_KEY
+KORAPAY_PUBLIC_KEY_LIVE=YOUR_KORAPAY_LIVE_PUBLIC_KEY
+KORAPAY_SECRET_KEY_LIVE=YOUR_KORAPAY_LIVE_SECRET_KEY
+KORAPAY_NGN_MARGIN=300
 RUNPOD_GPU_RATE_CENTS_PER_HOUR=58
 CLIPWEAVE_MARGIN_CENTS=30
 ```
@@ -429,8 +565,9 @@ Open [localhost:3000](http://localhost:3000). The existing skill was successfull
 uploaded and its ID/version saved to ignored `.env.local`. The upload script exits
 without creating another skill when `OPENAI_DIRECTOR_SKILL_ID` is already set.
 Restart the server after environment changes.
-Configure Creem's webhook as
-`https://clip-weave-omega.vercel.app/api/payments/creem/webhook`.
+Configure Korapay's webhook as
+`https://clip-weave-omega.vercel.app/api/payments/korapay/webhook` in the
+Korapay dashboard (the old Creem webhook URL is no longer used).
 
 Enable Email and Google under Supabase Authentication providers. Add the deployed
 `https://YOUR_DOMAIN/studio` URL to the Supabase redirect allow list so Google

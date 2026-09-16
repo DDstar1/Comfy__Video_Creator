@@ -2300,25 +2300,64 @@ function Workspace({
   }
 }
 
+const KORAPAY_SCRIPT_SRC =
+  "https://korablobstorage.blob.core.windows.net/modal-bucket/korapay-collections.min.js";
+let korapayScriptLoad: Promise<void> | null = null;
+function loadKorapayScript() {
+  if (window.Korapay) return Promise.resolve();
+  if (!korapayScriptLoad)
+    korapayScriptLoad = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = KORAPAY_SCRIPT_SRC;
+      script.onload = () => resolve();
+      script.onerror = () => {
+        korapayScriptLoad = null;
+        reject(new Error("Korapay checkout could not be loaded."));
+      };
+      document.body.appendChild(script);
+    });
+  return korapayScriptLoad;
+}
+
 function WalletDialog({ unlimited, balanceCents, reservedCents, onClose, onRefresh }: {
   unlimited: boolean; balanceCents: number; reservedCents: number; onClose: () => void; onRefresh: () => Promise<void>;
 }) {
   const [amount, setAmount] = useState("5");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  async function checkout() {
+  async function checkoutKorapay() {
     setBusy(true); setError("");
     try {
       const { data } = await supabase!.auth.getSession();
       if (!data.session) throw new Error("Sign in to add funds.");
-      const response = await fetch("/api/payments/creem", {
+      const response = await fetch("/api/payments/korapay", {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session.access_token}` },
         body: JSON.stringify({ amountUsd: Number(amount) }),
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? "Checkout could not be opened.");
-      window.location.assign(result.checkoutUrl);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Checkout could not be opened."); setBusy(false); }
+      if (!response.ok) throw new Error(result.error ?? "Checkout could not be started.");
+      await loadKorapayScript();
+      if (!window.Korapay) throw new Error("Korapay checkout could not be loaded.");
+      window.Korapay.initialize({
+        key: result.publicKey,
+        reference: result.reference,
+        amount: result.amountNgn,
+        currency: "NGN",
+        customer: result.customer,
+        // The wallet is credited by the server webhook, not this callback --
+        // it only exists to give the customer visible feedback and to
+        // refresh the shown balance once the webhook has had a moment to run.
+        onSuccess: () => {
+          setBusy(false);
+          setTimeout(() => void onRefresh(), 4000);
+        },
+        onFailed: () => {
+          setBusy(false);
+          setError("Payment was not completed.");
+        },
+        onClose: () => setBusy(false),
+      });
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Checkout could not be started."); setBusy(false); }
   }
   if (unlimited) return <Modal title="Your generation wallet" eyebrow="OWNER ACCESS" onClose={onClose}><p>Your account has unlimited generation credit. No wallet top-up is required.</p></Modal>;
   return <Modal title="Your generation wallet" eyebrow="WALLET" onClose={onClose}>
@@ -2329,7 +2368,10 @@ function WalletDialog({ unlimited, balanceCents, reservedCents, onClose, onRefre
     <p className="small muted">The minimum top-up is $5. Each completed render costs its RunPod compute time plus a $0.30 ClipWeave fee. Failed jobs return their full reservation.</p>
     <p className="small muted">Payments for ClipWeave services are collected by DTECH SOFTWARE LAB ENTERPRISE, the registered Nigerian business that operates ClipWeave. Wallet credit is non-transferable, cannot be withdrawn as cash, and may only be used for ClipWeave services.</p>
     {error && <p className="form-error" role="alert">{error}</p>}
-    <div className="modal-footer"><button className="button secondary" onClick={() => void onRefresh()}>Refresh balance</button><button className="button primary" disabled={busy || Number(amount) < 5} onClick={checkout}><CreditCard size={16} /> {busy ? "Opening…" : "Add funds"}</button></div>
+    <div className="modal-footer">
+      <button className="button secondary" onClick={() => void onRefresh()}>Refresh balance</button>
+      <button className="button primary" disabled={busy || Number(amount) < 5} onClick={checkoutKorapay}><CreditCard size={16} /> {busy ? "Opening…" : "Add funds"}</button>
+    </div>
   </Modal>;
 }
 
