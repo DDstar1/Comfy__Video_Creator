@@ -63,6 +63,7 @@ import {
   duplicateProjectAsDraft,
   newClip,
   sampleReferences,
+  referenceIdsFromDescription,
   resolveSuggestedReference,
   updateClip,
   validateClip,
@@ -74,7 +75,7 @@ import { AuthForm, NewProjectForm, UploadForm } from "./studio-forms";
 import { directorOutputSchema } from "@/lib/director-contract";
 import { assembleH3Workflow } from "@/lib/render-workflow";
 import { readRenderStatus } from "@/lib/render-status";
-import { Mentions, Modal, Photo } from "./ui";
+import { Mentions, MentionEditor, Modal, Photo } from "./ui";
 import { ProjectMerge } from "./project-merge";
 
 type Tab = "story" | "references" | "clips";
@@ -156,6 +157,7 @@ function Workspace({
   const [references, setReferences] =
     useState<ReferenceImage[]>(sampleReferences);
   const [dialog, setDialog] = useState<Dialog>(null);
+  const [regenerating, setRegenerating] = useState(false);
   const [quickSettingsProject, setQuickSettingsProject] = useState<Project | null>(null);
   const [renders, setRenders] = useState<
     Record<string, { jobId?: string; status: string; error?: string }>
@@ -620,9 +622,20 @@ function Workspace({
     patch?: Partial<Clip>,
   ) {
     if (!project || aiBusy) return;
-    const snapshot =
-      patch && target ? updateClip(project, target.id, patch) : project;
-    if (patch && target) saveProject(snapshot);
+    const effectiveDescription = target
+      ? patch?.pendingDescription ?? target.pendingDescription ?? target.description
+      : "";
+    const referenceIds = target
+      ? referenceIdsFromDescription(
+          effectiveDescription,
+          references,
+          project.referenceIds,
+        )
+      : [];
+    const snapshot = target
+      ? updateClip(project, target.id, { ...patch, referenceIds })
+      : project;
+    if (target) saveProject(snapshot);
     setAiError("");
     setAiBusy(true);
     const controller = new AbortController();
@@ -656,6 +669,14 @@ function Workspace({
             "The writing assistant could not complete this request.",
         );
       const parsed = directorOutputSchema.parse({ clips: result.clips });
+      const clips = parsed.clips.map((clip) => ({
+        ...clip,
+        referenceIds: referenceIdsFromDescription(
+          clip.description,
+          references,
+          snapshot.referenceIds,
+        ),
+      }));
       if (controller.signal.aborted) {
         if (process.env.NODE_ENV === "development")
           console.warn("Director result discarded: aborted after response", {
@@ -666,7 +687,7 @@ function Workspace({
         return;
       }
       if (action === "plan") {
-        const clips = parsed.clips.map((c) => ({
+        const plannedClips = clips.map((c) => ({
           ...newClip(0),
           ...c,
           image: references.find((r) => r.id === c.referenceIds[0])?.url ?? "",
@@ -675,16 +696,16 @@ function Workspace({
         }));
         saveProject({
           ...snapshot,
-          clips,
+          clips: plannedClips,
           updatedAt: new Date().toISOString(),
         });
-        setClipId(clips[0].id);
+        setClipId(plannedClips[0].id);
         navigate({ view: "studio", projectId: snapshot.id, tab: "clips" });
       } else if (target) {
         const applied = applyCompiledClip(
           snapshot,
           target.id,
-          parsed.clips[0],
+          clips[0],
           result.responseId,
         );
         if (process.env.NODE_ENV === "development") {
@@ -726,7 +747,8 @@ function Workspace({
     navigate({ view: "studio", projectId: p.id, tab: "clips" });
   }
   async function regenerateClip(target: Clip) {
-    if (!project || !user || !supabase) return;
+    if (!project || !user || !supabase || regenerating) return;
+    setRegenerating(true);
     try {
       const { data } = await supabase.auth.getSession();
       if (!data.session) throw new Error("Sign in again before regenerating.");
@@ -754,6 +776,8 @@ function Workspace({
         : "This chain was reset from its first clip.");
     } catch (error) {
       notify(error instanceof Error ? error.message : "Clip regeneration could not be prepared.");
+    } finally {
+      setRegenerating(false);
     }
   }
   async function openQuickSettings(p: ProjectSummary) {
@@ -2124,15 +2148,33 @@ function Workspace({
         </Modal>
       )}
       {dialog === "regenerate" && project && clip && (
-        <Modal title="Make a new version of this clip?" onClose={() => setDialog(null)}>
+        <Modal
+          title="Make a new version of this clip?"
+          onClose={() => !regenerating && setDialog(null)}
+        >
           <p className="modal-intro">
             This will replace this clip’s video. Any clips after it will need to be made again, because they continue from this moment.
           </p>
           <p className="small muted">The clips before this one will stay unchanged.</p>
           <div className="modal-footer">
-            <button className="button secondary" onClick={() => setDialog(null)}>Go back</button>
-            <button className="button danger" onClick={() => void regenerateClip(clip)}>
-              <Sparkles size={16} /> Make new version
+            <button
+              className="button secondary"
+              disabled={regenerating}
+              onClick={() => setDialog(null)}
+            >
+              Go back
+            </button>
+            <button
+              className="button danger"
+              disabled={regenerating}
+              onClick={() => void regenerateClip(clip)}
+            >
+              {regenerating ? (
+                <LoaderCircle size={16} className="spin" />
+              ) : (
+                <Sparkles size={16} />
+              )}
+              {regenerating ? "Making new version…" : "Make new version"}
             </button>
           </div>
         </Modal>
@@ -2358,9 +2400,9 @@ function ClipEditor({
     clip.pendingDescription ?? clip.description,
   );
   const [request, setRequest] = useState(clip.requestedChange ?? "");
-  const [showReferences, setShowReferences] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [openLockHelp, setOpenLockHelp] = useState<"duration" | "render" | null>(null);
+  const [shakeGenerate, setShakeGenerate] = useState(false);
   const locked = clip.status === "validated";
   const rendering =
     !!renderState &&
@@ -2372,16 +2414,55 @@ function ClipEditor({
   const isChainFollower = index > chainStart;
   const canEditStory = !locked;
   const chainRenderPreset = project.clips[chainStart]?.renderPreset ?? "quick";
-  const usedRefs = references.filter((r) => clip.referenceIds.includes(r.id));
+  const referenceDescription = editing
+    ? description
+    : clip.pendingDescription ?? clip.description;
+  const usedRefIds = referenceIdsFromDescription(
+    referenceDescription,
+    references,
+    project.referenceIds,
+  );
+  const usedRefs = usedRefIds.flatMap((id) =>
+    references.filter((reference) => reference.id === id),
+  );
   const priorReady = project.clips
     .slice(chainMembers(project.clips, index).start, index)
     .every((c) => c.status === "validated");
   const nextExists = index < project.clips.length - 1;
-  const editorRef = useRef<HTMLTextAreaElement>(null);
+  // Shared with both the note text above the action button and the button's own
+  // click guard, so the two can never disagree about why generating is blocked.
+  const generateBlockReason = !priorReady
+    ? "Validate earlier clips in this scene before generating this one."
+    : project.sample
+      ? "This is an example project. Start your own to generate real clips."
+      : clip.suggestedReferences?.length
+        ? "Resolve the suggested references above before generating this clip."
+        : !clip.technicalPrompt
+          ? "Compile a prompt before generating this clip."
+          : clip.pendingDescription
+            ? "Recompile the prompt to include your latest edit before generating."
+            : clip.requestedChange
+              ? "Submit or discard your pending change request before generating."
+              : clip.continuityStale
+                ? "This clip's continuity needs review — recompile before generating."
+                : null;
+  // Kept separate from generateBlockReason: validating an already-rendered,
+  // ready clip never depended on suggestedReferences/technicalPrompt/sample,
+  // and reusing the broader reason would have quietly started blocking it too.
+  const validateBlockReason = !priorReady
+    ? "Validate earlier clips in this scene before generating this one."
+    : clip.pendingDescription
+      ? "Recompile the prompt to include your latest edit before validating."
+      : clip.requestedChange
+        ? "Submit or discard your pending change request before validating."
+        : clip.continuityStale
+          ? "This clip's continuity needs review — recompile before validating."
+          : null;
+  const editorRef = useRef<HTMLDivElement>(null);
   function saveEdit() {
     if (!description.trim()) return;
     setEditing(false);
-    onCompile({ pendingDescription: description.trim() });
+    onCompile({ pendingDescription: description.trim(), referenceIds: usedRefIds });
   }
   return (
     <article className="clip-editor panel">
@@ -2474,14 +2555,16 @@ function ClipEditor({
         </div>
         {editing ? (
           <div className="description-edit">
-            <textarea
-              ref={editorRef}
-              id="clip-description"
-              aria-label="Readable clip description"
-              rows={6}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
+            <div className="description-textarea-wrap">
+              <MentionEditor
+                editorRef={editorRef}
+                text={description}
+                references={references.filter((reference) =>
+                  project.referenceIds.includes(reference.id),
+                )}
+                onChange={setDescription}
+              />
+            </div>
             <div>
               <span className="small muted">
                 Saving updates the H3 prompt through the writing assistant.
@@ -2548,15 +2631,6 @@ function ClipEditor({
           <span>
             IN THIS CLIP <span>{usedRefs.length}/9</span>
           </span>
-          {canEditStory && (
-            <button
-              className="text-button"
-              onClick={() => setShowReferences(!showReferences)}
-            >
-              {showReferences ? "Done" : "Manage"}
-              <Plus size={13} />
-            </button>
-          )}
         </div>
         <div className="reference-chips">
           {usedRefs.map((r) => (
@@ -2571,7 +2645,7 @@ function ClipEditor({
             </button>
           ))}
           {!usedRefs.length && !clip.suggestedReferences?.length && (
-            <span className="small muted">No references assigned yet.</span>
+            <span className="small muted">Mention project images in the description to add them here.</span>
           )}
         </div>
         {!!clip.suggestedReferences?.length && (
@@ -2594,38 +2668,6 @@ function ClipEditor({
                 </div>}
               </div>
             ))}
-          </div>
-        )}
-        {showReferences && canEditStory && (
-          <div className="clip-reference-picker">
-            {references
-              .filter((r) => project.referenceIds.includes(r.id))
-              .map((r) => (
-                <label key={r.id}>
-                  <input
-                    type="checkbox"
-                    checked={clip.referenceIds.includes(r.id)}
-                    disabled={
-                      !clip.referenceIds.includes(r.id) &&
-                      clip.referenceIds.length >= 9
-                    }
-                    onChange={(e) =>
-                      onChange({
-                        referenceIds: e.target.checked
-                          ? [...clip.referenceIds, r.id]
-                          : clip.referenceIds.filter((id) => id !== r.id),
-                      })
-                    }
-                  />
-                  <Photo src={r.url} alt="" />
-                  <span>{r.name}</span>
-                </label>
-              ))}
-            {!project.referenceIds.length && (
-              <p className="small muted">
-                Add images in the project’s References tab first.
-              </p>
-            )}
           </div>
         )}
         {!canEditStory ? (
@@ -2758,18 +2800,25 @@ function ClipEditor({
         <p role="alert">Render status: {renderState.error}</p>
       )}
       <div className="editor-footer">
-        <div>
-          <span className="small muted">
-            {locked
-              ? "Approved motion context is retained if you regenerate from here."
-              : priorReady
-                ? "Your story. Your creative direction."
-                : "Validate earlier clips in this scene before generating this one."}
-          </span>
-          {project.sample && (
-            <span className="example-label">EXAMPLE WORKSPACE</span>
-          )}
-        </div>
+        {(() => {
+          const isValidateStep = !locked && clip.videoUrl && clip.status === "ready";
+          const activeReason = isValidateStep ? validateBlockReason : generateBlockReason;
+          return (
+            <div>
+              <span
+                className={`small muted${activeReason && !locked ? " warning" : ""}${shakeGenerate ? " shake" : ""}`}
+                onAnimationEnd={() => setShakeGenerate(false)}
+              >
+                {locked
+                  ? "Approved motion context is retained if you regenerate from here."
+                  : (activeReason ?? "Your story. Your creative direction.")}
+              </span>
+              {project.sample && (
+                <span className="example-label">EXAMPLE WORKSPACE</span>
+              )}
+            </div>
+          );
+        })()}
         {locked ? (
           <div className="editor-footer-actions">
             <button className="button secondary" onClick={onRegenerate}>
@@ -2782,30 +2831,30 @@ function ClipEditor({
         ) : clip.videoUrl && clip.status === "ready" ? (
           <button
             className="button primary"
-            disabled={
-              !priorReady ||
-              !!clip.pendingDescription ||
-              !!clip.requestedChange ||
-              !!clip.continuityStale
-            }
-            onClick={onValidate}
+            aria-disabled={!!validateBlockReason}
+            onClick={() => {
+              if (validateBlockReason) {
+                setShakeGenerate(true);
+                return;
+              }
+              onValidate();
+            }}
           >
             <CheckCheck size={16} /> Validate clip
           </button>
         ) : (
           <button
             className={`button primary ${rendering ? "working" : ""}`}
-            disabled={
-              rendering ||
-              !!clip.suggestedReferences?.length ||
-              project.sample ||
-              !priorReady ||
-              !clip.technicalPrompt ||
-              !!clip.pendingDescription ||
-              !!clip.requestedChange ||
-              !!clip.continuityStale
-            }
-            onClick={onGenerate}
+            disabled={rendering}
+            aria-disabled={!rendering && !!generateBlockReason}
+            onClick={() => {
+              if (rendering) return;
+              if (generateBlockReason) {
+                setShakeGenerate(true);
+                return;
+              }
+              onGenerate();
+            }}
           >
             {rendering ? (
               <LoaderCircle size={16} className="spin" />

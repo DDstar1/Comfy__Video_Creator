@@ -136,6 +136,27 @@ export function parseDirectorOutput(raw: string, input: DirectorInput) {
             "overall_soundscape",
             "non_diegetic_music",
           ];
+    // The director occasionally writes every valid H3 block but swaps their
+    // order. The blocks are self-contained, so restoring the documented order
+    // is safe and avoids discarding an otherwise usable creative response.
+    const matches = sections.map((section) => ({
+      section,
+      match: new RegExp(`^${section}:`, "m").exec(clip.technicalPrompt),
+    }));
+    if (matches.every(({ match }) => match)) {
+      const orderedBySource = [...matches].sort(
+        (a, b) => a.match!.index - b.match!.index,
+      );
+      const blocks = new Map(
+        orderedBySource.map(({ section, match }, index) => [
+          section,
+          clip.technicalPrompt
+            .slice(match!.index, orderedBySource[index + 1]?.match!.index)
+            .trim(),
+        ]),
+      );
+      clip.technicalPrompt = sections.map((section) => blocks.get(section)).join("\n\n");
+    }
     let previous = -1;
     for (const section of sections) {
       const match = new RegExp(`^${section}:`, "m").exec(clip.technicalPrompt);

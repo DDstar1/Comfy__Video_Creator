@@ -29,8 +29,10 @@ supplied. Use [] when none would help. Suggestions are optional images, NOT supp
 references: never put them in referenceIds or assign them a Picture number. Describe
 their subjects fully in ordinary words in both prompts, without a missing-image placeholder.
 For revise, preserve only the target clip's remaining suggestedReferences; never recreate
-removed suggestions. Newly linked referenceIds are authoritative: use their supplied
-images and descriptions to update the technical prompt. Respect project ratio and quality.
+removed suggestions. A clip description is authoritative for its visual references: its
+referenceIds must contain exactly the supplied images named as @Name in that description,
+in mention order, and no images absent from it. Use those supplied images and descriptions
+to update the technical prompt. Respect project ratio and quality.
 continuesPrevious decides whether the sequence continues the previous clip or cuts to this one.
 Set it TRUE only when this clip is the same continuous camera take as the previous clip:
 same place, same subjects, action carrying straight on from the previous endState.

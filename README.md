@@ -1,5 +1,131 @@
 # ClipWeave Next.js application
 
+## Latest documentation checkpoint — 2026-09-16
+
+This Next.js application now owns the complete customer flow: original idea or
+book-scene project creation, fixed project output settings, reference handling,
+H3 planning/revision, chain-aware rendering/recovery, validated-chain merge
+exports, and the owner-only `/admin` analytics dashboard.
+
+**Correction to this section, same day.** The claim above — that Duration and
+Render already stacked at desktop with the note beside the rows — was
+inaccurate: the rule meant to do that lived only inside a `max-width: 720px`
+mobile query and never applied at desktop widths, so desktop kept rendering the
+two settings side by side. Fixed by deleting the desktop-only treatment
+entirely and reusing mobile's already-working rules (55px label column, a
+160px column shared by the select and its lock icon) unscoped, so desktop and
+mobile now render identically rather than approximately alike. The contextual
+note is hidden at every width, not shown beside the rows on desktop as
+previously described. The same unification was applied to the validated-clip
+footer's **Regenerate from here** / **Next clip** buttons, which now stack full
+width with the note above them at every viewport too.
+
+One real CSS bug surfaced while fixing this, worth remembering for this file:
+`.editor-footer > div { display: flex; flex-direction: column; }` matches
+`.editor-footer-actions` as well, since it's a direct child `<div>`, and a
+class-plus-element selector outranks a single-class selector regardless of
+which rule appears later in the file. The intended `.editor-footer-actions`
+grid rule was silently losing to it. Fixed by scoping the rule as
+`.editor-footer .editor-footer-actions` to raise its specificity. Verified live
+by measuring rendered element positions (`getBoundingClientRect`), not just by
+eye — both settings rows share identical column widths, the lock icon renders
+at its real 28px size instead of being compressed, and the two footer buttons
+are equal width with no overlap. This is a layout-only change: it does not
+change clip duration, render-profile locks, or the first-clip-in-chain
+inheritance rule — a validated clip's settings lock because it is validated,
+independent of its position in a chain. TypeScript, targeted ESLint and live
+CSS layout checks passed; no paid provider request was needed.
+
+Also confirmed again this session: an F5 keypress sent to the browser pane does
+not reliably reload this app. Use a full navigation instead when verifying a
+CSS or asset change — this cost real time twice in this same session before
+being remembered.
+
+The shared generated logo in `public/brand/clipweave-mark.png` is used in the
+landing header/footer, policy header, Studio sidebar and browser icon metadata.
+The analytics migration is applied; `SUPABASE_SERVICE_KEY` and compatible
+`SUPABASE_SERVICE_ROLE_KEY` are server-only credentials. Cost estimates require
+configured rates and are never presented as reconciled net profit.
+
+## Later the same day — regenerate feedback, disabled-button explanations, live @mention preview
+
+**Regenerate confirmation now shows progress.** "Make new version" on the
+regenerate-chain dialog previously gave no feedback while the API call and
+project reload were in flight. Added a `regenerating` state: the confirm
+button swaps to the same spinning `LoaderCircle` used elsewhere in the app and
+its label changes to "Making new version…"; both dialog buttons disable and
+the dialog can't be dismissed mid-flight, since closing it while the server
+archives videos and resets clip rows would be confusing. Cleared in a
+`finally` so it resets on both success and failure.
+
+**Every reason Generate/Validate can be disabled is now explained, not
+silent.** The Generate button has eight distinct disable conditions
+(rendering, unresolved suggested references, sample project, an earlier clip
+in the chain not ready, no compiled prompt, a pending description edit, a
+pending change request, stale continuity); only one of them ever had
+explanatory text. A real user hit this: a clip showed "Revision pending" with
+Generate greyed out and the note above it reading "Your story. Your creative
+direction." — no connection between the two. Added `generateBlockReason` and a
+separately-scoped `validateBlockReason` (the Validate button never depended on
+suggestedReferences/technicalPrompt/sample, so it needed its own reason rather
+than reusing the broader one) computed once and shared between the note text
+and the button's own click handling, so the two can never disagree.
+
+Blocked reasons now render in red (`#8f3429`, the app's existing danger color,
+not a new one) via a `.warning` class, and clicking a disabled button shakes
+that note text — implemented by dropping the native `disabled` attribute in
+favor of `aria-disabled` plus a manual click guard, since a genuinely
+`disabled` button never fires `onClick` at all and couldn't be clicked to
+shake in the first place. `button[aria-disabled="true"]` was given the same
+dimmed/`cursor: not-allowed` styling `button:disabled` already had, since
+`aria-disabled` alone doesn't get any default browser styling — missing this
+would have made blocked buttons look enabled while silently doing nothing on
+click. Verified live: red color measured as exact `rgb(143, 52, 41)`, the
+shake class is added on click and removed via `onAnimationEnd` so it can
+re-trigger, and the "ready" state still measures `aria-disabled="false"` with
+full opacity.
+
+**Live @mention preview in the description textarea.** Typing `@Tortoise` (a
+name matching an account reference) now highlights it green with a small
+thumbnail; an unmatched name like `@NotARealName` highlights red — live, while
+still typing, not just in the read-only view. A plain `<textarea>` cannot
+style substrings of its own content, so this is the standard mirror-overlay
+technique: an invisible-text `<div>` (`MentionOverlay` in `ui.tsx`, sharing the
+same mention regex `Mentions` already used so the two can never disagree on
+what counts as a match) sits behind the textarea, which becomes
+background-transparent so the overlay's colored spans show through. Manual
+`resize` was moved from the textarea to its wrapper (CSS `resize` works on any
+element with non-visible `overflow`, not just textareas) so the overlay can
+just fill `inset: 0` of that wrapper and stay correct after a manual resize
+with no JS needed to keep it in sync.
+
+The one real constraint of this technique: every character in the overlay
+must line up with the real textarea underneath it, or the highlight lands on
+the wrong word. An inline thumbnail image breaks that immediately, since it
+consumes width the textarea's own line-wrapping doesn't know about — confirmed
+live: with a `right: calc(100% + 4px)` thumbnail placement, a mention
+partway through a line (`"...as @Lion closes..."`) rendered the thumbnail
+directly on top of the preceding word "as". Any horizontal placement has this
+problem. Fixed by floating the thumbnail **above** the mention instead
+(`bottom: 100%`) — vertical position never affects line-wrapping, so it's safe
+from the alignment risk entirely, at the cost of a small, currently unverified
+risk of overlapping the line above it for a mention that isn't on the
+textarea's first line. Alignment itself was verified live before this last
+fix: textarea and overlay boxes measured pixel-identical, and `scrollHeight`
+matched exactly across 12 wrapped lines with two mentions each. **The
+vertical-placement fix has not yet been re-verified live** — it was applied
+and passed TypeScript/ESLint, but the browser check was interrupted before
+confirming the multi-line collision case visually.
+
+This overlay is decorative only (`pointer-events: none`): mentions are not
+clickable while editing, unlike the read-only view where clicking one opens
+its reference preview. Making them clickable here would need a contenteditable
+editor instead of a textarea, with its own known complications (cursor
+position, paste handling, undo/redo) — not attempted.
+
+All of the above: TypeScript and targeted ESLint passed. Not yet committed.
+
+
 ## Current product state — 2026-09-13
 
 The frontend is the complete ClipWeave web application and server-side prompt

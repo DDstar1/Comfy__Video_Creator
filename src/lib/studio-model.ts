@@ -8,6 +8,31 @@ export type ReferenceImage = {
   category: "Character" | "Location" | "Object" | "Image";
   sample?: boolean;
 };
+
+/**
+ * A clip's visual references are declared in its readable description. Keep
+ * the returned order identical to the mentions, since it also defines the
+ * <Picture N> order used by the compiled H3 prompt.
+ */
+export function referenceIdsFromDescription(
+  description: string,
+  references: ReferenceImage[],
+  projectReferenceIds: string[],
+) {
+  const allowed = new Map(
+    references
+      .filter((reference) => projectReferenceIds.includes(reference.id))
+      .map((reference) => [reference.name, reference.id]),
+  );
+  const ids: string[] = [];
+
+  for (const match of description.matchAll(/@([\p{L}\p{N}_]+)/gu)) {
+    const id = allowed.get(match[1]);
+    if (id && !ids.includes(id)) ids.push(id);
+  }
+  return ids;
+}
+
 export type Clip = {
   suggestedReferences?: { name: string; description: string }[];
   id: string;
@@ -330,7 +355,9 @@ export function resolveSuggestedReference(project: Project, name: string, image?
       ...clip,
       suggestedReferences: clip.suggestedReferences?.filter((ref) => ref.name !== name),
       ...(image ? {
-        referenceIds: [...new Set([...clip.referenceIds, image.id])],
+        // Linking an uploaded image writes its @mention into the readable
+        // description; compilation then derives referenceIds from that text.
+        pendingDescription: `${clip.pendingDescription ?? clip.description}${(clip.pendingDescription ?? clip.description).includes(`@${image.name}`) ? "" : ` @${image.name}`}`.trim(),
         requestedChange: [clip.requestedChange, `Use the linked image @${image.name} (ID ${image.id}) as the visual reference for ${name}.`].filter(Boolean).join("\n").slice(0, 4000),
         continuityStale: true,
         status: "draft" as const,

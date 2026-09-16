@@ -1,5 +1,21 @@
 # ClipWeave database and reference storage
 
+## Latest documentation checkpoint — 2026-09-16
+
+This mirrored database handoff remains current: the quality/reference and owner
+analytics migrations are applied, private generated-video exports remain in
+Supabase storage, and trusted usage writes accept `SUPABASE_SERVICE_KEY` or the
+standard compatible `SUPABASE_SERVICE_ROLE_KEY`. The Duration/Render Studio
+layout and validated-clip footer buttons were corrected the same day (the
+desktop stacking previously described here did not actually apply; see the
+root README) — presentation-only, requires no database change. Three further
+fixes landed later the same day (disabled-button explanations, a regenerate
+spinner, and live @mention highlighting in the description textarea) — all
+client-side only, no migration, no new table, no changed query. See the root
+README for the full account. Unknown provider costs remain unknown; wallet
+deposits are not revenue.
+
+
 ## Current database state — 2026-09-13
 
 This handoff copy mirrors the active Supabase documentation. Both the

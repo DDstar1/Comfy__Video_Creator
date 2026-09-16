@@ -96,7 +96,8 @@ a {
     border-color 0.18s,
     box-shadow 0.18s;
 }
-button:disabled {
+button:disabled,
+button[aria-disabled="true"] {
   cursor: not-allowed;
   opacity: 0.48;
 }
@@ -1249,14 +1250,22 @@ img {
   background: #fcfdf9;
   padding: 15px 22px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: stretch;
+  flex-direction: column;
   gap: 12px;
 }
 .editor-footer > div {
   display: flex;
   flex-direction: column;
   gap: 5px;
+}
+.editor-footer > div:first-child,
+.editor-footer-actions {
+  width: 100%;
+}
+.editor-footer > div:first-child .small {
+  max-width: none;
+  width: 100%;
 }
 .editor-footer .small {
   font-size: 10px;
@@ -1272,22 +1281,29 @@ img {
   padding: 10px 13px;
 }
 
-.editor-footer-actions {
-  display: flex;
+.editor-footer .editor-footer-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: center;
   gap: 0.6rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+}
+.editor-footer-actions .button {
+  min-width: 0;
+  justify-content: center;
 }
 .clip-settings-line {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 10px;
   font-size: 10px;
   color: #788769;
   margin-top: 17px;
 }
 .clip-settings-group {
-  display: flex;
+  display: grid;
+  grid-template-columns: 55px 160px;
   align-items: center;
   gap: 8px;
 }
@@ -1295,8 +1311,13 @@ img {
   display: flex;
   align-items: center;
   gap: 5px;
+  min-width: 0;
+  width: 55px;
 }
 .clip-settings-line select {
+  width: 100%;
+  height: 36px;
+  min-height: 36px;
   padding: 3px 5px;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -1323,6 +1344,7 @@ img {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   width: 28px;
   height: 28px;
   padding: 0;
@@ -1352,9 +1374,7 @@ img {
   box-shadow: 0 6px 18px rgba(25, 35, 22, 0.18);
 }
 .clip-settings-line > span {
-  margin-left: auto;
-  font-size: 9px;
-  color: #849476;
+  display: none;
 }
 .locked-note {
   display: flex;
@@ -1395,6 +1415,24 @@ img {
 }
 .muted {
   color: var(--muted);
+}
+.muted.warning {
+  color: #8f3429;
+}
+@keyframes shake-text {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-4px); }
+  40%, 60% { transform: translateX(4px); }
+}
+.shake {
+  display: inline-block;
+  animation: shake-text 0.4s ease-in-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .shake {
+    animation: none;
+  }
 }
 .small {
   font-size: 11px;
@@ -2009,7 +2047,7 @@ img {
 .field input,
 .field textarea,
 .field select,
-.description-edit textarea {
+.mention-editor {
   display: block;
   width: 100%;
   background: #fbfcf9;
@@ -2020,6 +2058,117 @@ img {
   font-size: 12px;
   line-height: 1.7;
   font-weight: 400;
+}
+.description-textarea-wrap {
+  resize: vertical;
+  min-height: 128px;
+  border: 1px solid #dde5d3;
+  border-radius: 7px;
+  background: #fbfcf9;
+}
+.mention-editor-shell {
+  position: relative;
+  min-height: 128px;
+  height: 100%;
+}
+.mention-editor {
+  box-sizing: border-box;
+  min-height: 128px;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+.mention-autocomplete {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 4px);
+  left: 0;
+  width: min(292px, 100%);
+  overflow: hidden;
+  border: 1px solid #cbd8bf;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgba(54, 74, 45, 0.16);
+}
+.mention-autocomplete button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 38px;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 0;
+  border-bottom: 1px solid #e6ecdf;
+  background: transparent;
+  color: #4d5d42;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.mention-autocomplete button:last-child {
+  border-bottom: 0;
+}
+.mention-autocomplete button.active,
+.mention-autocomplete button:hover {
+  background: #edf4e8;
+}
+.mention-autocomplete .photo-placeholder,
+.mention-autocomplete img {
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+.mention-autocomplete .photo-placeholder {
+  display: grid;
+  place-items: center;
+}
+.mention-autocomplete .photo-placeholder svg,
+.mention-autocomplete .photo-placeholder span {
+  display: none;
+}
+.mention-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  vertical-align: middle;
+  border-radius: 3px;
+  padding: 1px 3px;
+  max-width: 100%;
+}
+.mention-mark-found {
+  background: #eaf4e9;
+}
+.mention-mark-missing {
+  background: #fcf0ef;
+}
+.mention-mark-thumb {
+  display: inline-flex;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px rgba(49, 85, 50, 0.35);
+  overflow: hidden;
+  pointer-events: none;
+}
+.mention-mark-thumb > img,
+.mention-mark-thumb > .photo-placeholder {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.mention-mark-thumb > .photo-placeholder {
+  display: grid;
+  place-items: center;
+}
+.mention-mark-thumb > .photo-placeholder svg,
+.mention-mark-thumb > .photo-placeholder span {
+  display: none;
 }
 .field textarea {
   resize: vertical;
@@ -2110,10 +2259,6 @@ img {
   margin-top: 22px;
   font-size: 8px;
   letter-spacing: 1px;
-}
-.description-edit textarea {
-  font-size: 12px;
-  resize: vertical;
 }
 .description-edit > div {
   display: flex;
@@ -2926,50 +3071,9 @@ hr {
   }
 }
 @media (max-width: 720px) {
-  .editor-footer {
-    align-items: stretch;
-    flex-direction: column;
-  }
-  .editor-footer > div:first-child,
-  .editor-footer-actions {
-    width: 100%;
-  }
-  .editor-footer > div:first-child .small {
-    max-width: none;
-    width: 100%;
-  }
-  .editor-footer-actions {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    flex-wrap: nowrap;
-  }
-  .editor-footer-actions .button {
-    min-width: 0;
-    justify-content: center;
-  }
   .clips-section > .section-heading {
     margin-top: 28px;
     margin-bottom: 28px;
-  }
-  .clip-settings-line {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 10px;
-  }
-  .clip-settings-group {
-    display: grid;
-    grid-template-columns: 55px 160px;
-    align-items: center;
-    gap: 8px;
-  }
-  .clip-settings-group label {
-    min-width: 0;
-    width: 55px;
-  }
-  .clip-settings-group select {
-    width: 100%;
-    height: 36px;
-    min-height: 36px;
   }
   /* Let the horizontal sequence reach both viewport edges while the editor
      below keeps the readable page gutter. */

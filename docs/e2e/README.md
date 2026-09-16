@@ -1,5 +1,76 @@
 # ClipWeave end-to-end test and Claude Code handoff
 
+## Latest documentation checkpoint — 2026-09-16
+
+**Correction, same day.** The claim above that Duration/Render already stacked
+at desktop was wrong — the rule that would have done that was scoped to a
+`max-width: 720px` query and never reached desktop, so desktop stayed
+side-by-side. Fixed by dropping the desktop-specific treatment and reusing
+mobile's rules unscoped, so both are now identical: 55px label column, 160px
+column shared by the select and its lock icon, note hidden at every width. The
+validated-clip footer's **Regenerate from here** / **Next clip** buttons got the
+same treatment and now stack full width everywhere. Verified by measuring real
+element positions live, not by eye.
+
+A CSS specificity bug was found in the process: `.editor-footer > div` (a
+class-plus-element selector) matches `.editor-footer-actions` too, since it's a
+direct child, and outranked the intended grid rule for that class regardless of
+source order — the buttons rendered overlapping and unstyled for several edits
+before this was traced. Two testing lessons reinforced from earlier: F5 sent to
+the browser pane still does not reliably reload this app — a full navigation is
+required to trust a CSS check — and reading computed styles/bounding rects
+caught this bug where a screenshot alone had not. This was verified with
+TypeScript, targeted ESLint and live layout measurement; it made no paid
+provider request.
+
+## Later the same day
+
+Three more changes, found by direct user testing against the running app
+rather than by review:
+
+1. **A user asked why Generate was disabled with no visible reason.** Traced
+   to a clip with a pending readable-description edit — the note above the
+   button said "Your story. Your creative direction." regardless, since only
+   one of the button's eight disable conditions had ever had explanatory text.
+   Fixed by computing the real reason once and sharing it between the note and
+   the button's own click handling (Validate got its own narrower version,
+   since its disable conditions are a subset — reusing the broader Generate
+   reason would have started blocking Validate on conditions that never
+   applied to it before). Verified live against the exact clip that surfaced
+   the question.
+2. **Regenerate confirmation had no loading feedback**, and disabled
+   buttons gave no indication of *why* on click. Added a spinner state for the
+   former; for the latter, disabled buttons had to stop using the native
+   `disabled` attribute (which blocks `onClick` from firing at all) in favor
+   of `aria-disabled` plus a manual guard, restyled to look identically
+   disabled since `aria-disabled` gets no default browser styling. Both
+   verified live: spinner class toggles correctly around the async call, and
+   the shake-on-click class is added then removed via `onAnimationEnd`.
+3. **Live @mention highlighting in the description textarea**, requested as
+   "would the textarea be able to mark the reference green/red automatically."
+   Built as a mirror-overlay behind a transparent-background textarea (see the
+   design note in the root/`docs/workspace` README for the full technique and
+   its constraint: every character must line up, or the highlight lands on
+   the wrong word). Verified live: textarea and overlay boxes measured
+   pixel-identical, `scrollHeight` matched exactly across 12 wrapped lines. A
+   real bug surfaced from a **user screenshot, not a code review**: the
+   thumbnail's original left-of-mention placement rendered directly on top of
+   the preceding word when a mention wasn't at the start of a line. Fixed by
+   floating it above the mention instead. **That fix has not yet been
+   re-verified live** — the browser check was interrupted before confirming
+   the line-wrapping/collision case visually. Do not assume it is fixed
+   without checking a mention on a wrapped, non-first line.
+
+TypeScript and targeted ESLint passed for all three. No paid provider request
+was needed for any of them.
+
+Current product documentation also covers direct project URLs, fixed quality and
+frame settings, suggested-reference resolution, chain-aware rendering, private
+CPU FFmpeg merge exports, and the applied owner analytics migration. Provider
+cost tracking still needs configured rates and normal production reconciliation;
+the dashboard deliberately does not label its estimates as net profit.
+
+
 ## Documentation checkpoint — 2026-09-13
 
 The local product now also includes the owner-only `/admin` dashboard and a

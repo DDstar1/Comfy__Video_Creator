@@ -1,5 +1,46 @@
 # ClipWeave — book-to-video studio
 
+## Latest documentation checkpoint — 2026-09-16
+
+This handoff copy mirrors the active project state: direct project routes,
+fixed project quality/frame settings, suggested-reference resolution,
+chain-aware rendering and validated-chain CPU FFmpeg exports are implemented.
+The shared ClipWeave mark is used throughout the web experience and the applied
+analytics migration backs `/admin` with server-only cost tracking.
+
+**Correction, same day.** Duration/Render did not actually stack at desktop as
+previously stated — the rule was scoped to a mobile-only query. Fixed by
+reusing mobile's layout unscoped, so desktop and mobile now render identically
+(55px label, 160px column shared by the select and lock icon, note hidden
+everywhere). The validated-clip footer's Regenerate/Next-clip buttons got the
+same fix and now stack full width at every viewport. A CSS specificity bug
+along the way — a generic `.editor-footer > div` rule outranking the intended
+`.editor-footer-actions` grid rule — caused the buttons to render overlapping
+before it was traced and fixed. Verified live by measuring rendered element
+positions, not by eye. This changes only presentation, not rendering behavior,
+clip duration, render-profile locks, or saved values. Targeted type/lint and
+live CSS-layout checks passed.
+
+**Later the same day:** three more fixes, each found by direct user testing.
+(1) Every reason Generate/Validate can be disabled is now shown as red text
+above the button instead of only one of eight conditions ever explaining
+itself — a real user hit a silent case and asked why. (2) The regenerate
+confirmation button now shows a spinner while its API call and project reload
+are in flight, and clicking a disabled button shakes the reason text instead
+of doing nothing — both needed dropping the native `disabled` attribute for
+`aria-disabled` plus a manual click guard, since a truly disabled button never
+fires `onClick`. (3) The description textarea now highlights `@mentions`
+green (matched, with a small thumbnail) or red (unmatched) live while typing,
+via a mirror-overlay `<div>` behind a transparent textarea. A user screenshot
+caught a real bug in this: the thumbnail's original left-of-word placement
+landed on top of whatever word preceded the mention on the same line — fixed
+by floating it above instead, since horizontal placement can't reserve space
+without desyncing the overlay's line-wrapping from the real textarea's.
+**That fix has not yet been re-verified live** in the browser. See the root
+README for the full account. TypeScript and targeted ESLint passed; no paid
+provider request was needed.
+
+
 ## Current product state — 2026-09-13
 
 This workspace handoff copy mirrors the root project state. ClipWeave now has
