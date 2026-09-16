@@ -83,20 +83,14 @@ type Dialog =
   "new" | "auth" | "upload" | "help" | "settings" | "account" | "validate" | "regenerate" | "wallet" | "delete" | null;
 type Route = StudioRoute;
 
-type ClipTransition = { direction: 1 | -1; mobile: boolean; distance: number };
+type ClipTransition = { direction: 1 | -1; distance: string };
 const clipDetailVariants = {
-  initial: (transition: ClipTransition = { direction: 1, mobile: false, distance: 0 }) => ({
-    opacity: 0,
-    ...(transition.mobile
-      ? { x: transition.direction * transition.distance }
-      : { y: transition.direction * transition.distance }),
+  initial: (transition: ClipTransition = { direction: 1, distance: "0%" }) => ({
+    x: transition.direction === 1 ? transition.distance : `-${transition.distance}`,
   }),
-  visible: { opacity: 1, x: 0, y: 0 },
-  exit: (transition: ClipTransition = { direction: 1, mobile: false, distance: 0 }) => ({
-    opacity: 0,
-    ...(transition.mobile
-      ? { x: -transition.direction * transition.distance }
-      : { y: -transition.direction * transition.distance }),
+  visible: { x: 0, y: 0 },
+  exit: (transition: ClipTransition = { direction: 1, distance: "0%" }) => ({
+    x: transition.direction === 1 ? `-${transition.distance}` : transition.distance,
   }),
 };
 
@@ -1544,29 +1538,28 @@ function Workspace({
                             </p>
                           </div>
                         </div>
-                        <AnimatePresence
-                          mode="wait"
-                          initial={false}
-                          custom={{
-                            direction: clipTransitionDirection,
-                            mobile: isMobile,
-                            distance: reduceMotion ? 0 : 24,
-                          }}
-                        >
-                          {clip && (
-                            <motion.div
-                              key={clip.id}
-                              custom={{
-                                direction: clipTransitionDirection,
-                                mobile: isMobile,
-                                distance: reduceMotion ? 0 : 24,
-                              }}
-                              variants={clipDetailVariants}
-                              initial="initial"
-                              animate="visible"
-                              exit="exit"
-                              transition={{ duration: reduceMotion ? 0 : 0.2, ease: "easeOut" }}
-                            >
+                        <div className="clip-detail-slider">
+                          <AnimatePresence
+                            mode="popLayout"
+                            initial={false}
+                            custom={{
+                              direction: clipTransitionDirection,
+                              distance: reduceMotion ? "0%" : "108%",
+                            }}
+                          >
+                            {clip && (
+                              <motion.div
+                                key={clip.id}
+                                custom={{
+                                  direction: clipTransitionDirection,
+                                  distance: reduceMotion ? "0%" : "108%",
+                                }}
+                                variants={clipDetailVariants}
+                                initial="initial"
+                                animate="visible"
+                                exit="exit"
+                                transition={{ duration: reduceMotion ? 0 : 0.46, ease: [0.22, 1, 0.36, 1] }}
+                              >
                               <ClipEditor
                                 key={`${clip.id}:${clip.revision ?? 0}`}
                                 project={project}
@@ -1605,9 +1598,10 @@ function Workspace({
                                   if (next) selectClip(next.id);
                                 }}
                               />
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
                       </div>
                     ) : (
                       <div className="empty-state panel">

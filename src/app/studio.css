@@ -731,6 +731,11 @@ img {
   gap: 24px;
   align-items: start;
 }
+.clip-detail-slider {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+}
 .clip-sequence {
   min-width: 0;
 }
