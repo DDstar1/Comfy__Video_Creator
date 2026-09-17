@@ -1070,7 +1070,7 @@ function Workspace({
             </span>
             {user && (
               <button className="wallet-pill" onClick={() => setDialog("wallet")} aria-label="Open wallet">
-                <CreditCard size={15} /> {wallet.unlimited ? "Unlimited" : `$${(wallet.balance_cents / 100).toFixed(2)}`}
+                <CreditCard size={15} /> {wallet.unlimited ? "Unlimited" : `${Math.round(wallet.balance_cents / 10).toLocaleString()} tokens`}
               </button>
             )}
             <button
@@ -2319,12 +2319,37 @@ function loadKorapayScript() {
   return korapayScriptLoad;
 }
 
+const formatNgn = (value: number) =>
+  new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(value);
+
 function WalletDialog({ unlimited, balanceCents, reservedCents, onClose, onRefresh }: {
   unlimited: boolean; balanceCents: number; reservedCents: number; onClose: () => void; onRefresh: () => Promise<void>;
 }) {
-  const [amount, setAmount] = useState("5");
+  // The customer types and is charged an NGN amount directly; this state
+  // holds that NGN figure, not a USD one -- the wallet credit it buys is
+  // derived live from ngnPerUsd, not the other way around. The $5 minimum is
+  // converted to its NGN equivalent at the live rate rather than a flat NGN
+  // number, so the field can't open on an amount too small to submit.
+  const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [ngnPerUsd, setNgnPerUsd] = useState<number | null>(null);
+  const dialogRef = useRef<HTMLDialogElement | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/payments/korapay", { signal: controller.signal, cache: "no-store" })
+      .then((response) => response.json())
+      .then((body) => {
+        if (typeof body.ngnPerUsd !== "number") return;
+        setNgnPerUsd(body.ngnPerUsd);
+        setAmount((current) => current === "" ? String(Math.ceil(5 * body.ngnPerUsd)) : current);
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
+  const usdEquivalent = ngnPerUsd ? Number(amount) / ngnPerUsd : null;
+  const minNgn = ngnPerUsd ? Math.ceil(5 * ngnPerUsd) : undefined;
+  const maxNgn = ngnPerUsd ? Math.floor(1000 * ngnPerUsd) : undefined;
   async function checkoutKorapay() {
     setBusy(true); setError("");
     try {
@@ -2332,12 +2357,18 @@ function WalletDialog({ unlimited, balanceCents, reservedCents, onClose, onRefre
       if (!data.session) throw new Error("Sign in to add funds.");
       const response = await fetch("/api/payments/korapay", {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session.access_token}` },
-        body: JSON.stringify({ amountUsd: Number(amount) }),
+        body: JSON.stringify({ amountNgn: Number(amount) }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Checkout could not be started.");
       await loadKorapayScript();
       if (!window.Korapay) throw new Error("Korapay checkout could not be loaded.");
+      // Our own wallet dialog is a native <dialog> shown via showModal(),
+      // which renders in the browser's top layer above every ordinary
+      // element -- including Korapay's own injected overlay, no matter its
+      // z-index. Closing it here drops it out of the top layer so Korapay's
+      // modal is actually visible; each callback below brings it back.
+      dialogRef.current?.close();
       window.Korapay.initialize({
         key: result.publicKey,
         reference: result.reference,
@@ -2347,6 +2378,12 @@ function WalletDialog({ unlimited, balanceCents, reservedCents, onClose, onRefre
         // The wallet is credited by the server webhook, not this callback --
         // it only exists to give the customer visible feedback and to
         // refresh the shown balance once the webhook has had a moment to run.
+        // Reopening our dialog is deliberately NOT done here: Korapay still
+        // shows its own success/failure confirmation screen after this
+        // fires, and re-entering the top layer immediately would bury it,
+        // same as the original checkout-modal issue. onClose, which fires
+        // once Korapay's own overlay is actually done, is the only place
+        // that reopens the dialog.
         onSuccess: () => {
           setBusy(false);
           setTimeout(() => void onRefresh(), 4000);
@@ -2355,22 +2392,29 @@ function WalletDialog({ unlimited, balanceCents, reservedCents, onClose, onRefre
           setBusy(false);
           setError("Payment was not completed.");
         },
-        onClose: () => setBusy(false),
+        onClose: () => {
+          dialogRef.current?.showModal();
+          setBusy(false);
+        },
       });
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Checkout could not be started."); setBusy(false); }
   }
   if (unlimited) return <Modal title="Your generation wallet" eyebrow="OWNER ACCESS" onClose={onClose}><p>Your account has unlimited generation credit. No wallet top-up is required.</p></Modal>;
-  return <Modal title="Your generation wallet" eyebrow="WALLET" onClose={onClose}>
-    <div className="wallet-balance"><span>Available credit</span><strong>${(balanceCents / 100).toFixed(2)}</strong>
-      {reservedCents > 0 && <small>${(reservedCents / 100).toFixed(2)} reserved for active renders</small>}
+  return <Modal title="Your generation wallet" eyebrow="WALLET" onClose={onClose} onDialogReady={(dialog) => { dialogRef.current = dialog; }}>
+    <div className="wallet-balance"><span>Available tokens</span><strong>{Math.round(balanceCents / 10).toLocaleString()}</strong>
+      {reservedCents > 0 && <small>{Math.round(reservedCents / 10).toLocaleString()} tokens reserved for active renders</small>}
     </div>
-    <label className="field">Amount to add (USD)<input type="number" min="5" max="1000" step="1" value={amount} onChange={(event) => setAmount(event.target.value)} /></label>
-    <p className="small muted">The minimum top-up is $5. Each completed render costs its RunPod compute time plus a $0.30 ClipWeave fee. Failed jobs return their full reservation.</p>
-    <p className="small muted">Payments for ClipWeave services are collected by DTECH SOFTWARE LAB ENTERPRISE, the registered Nigerian business that operates ClipWeave. Wallet credit is non-transferable, cannot be withdrawn as cash, and may only be used for ClipWeave services.</p>
+    <label className="field">Amount to add (NGN)<input type="number" min={minNgn} max={maxNgn} step="100" value={amount} onChange={(event) => setAmount(event.target.value)} /></label>
+    <div className="small muted wallet-quote">
+      <span>Tokens</span><span>=</span><span>{usdEquivalent === null || !Number.isFinite(usdEquivalent) ? "—" : `${Math.round(usdEquivalent * 10).toLocaleString()} tokens`}</span>
+      <span>Minimum</span><span>=</span><span>{minNgn !== undefined ? formatNgn(minNgn) : "Loading…"}</span>
+      <span>Maximum</span><span>=</span><span>{maxNgn !== undefined ? formatNgn(maxNgn) : "Loading…"}</span>
+    </div>
+    <p className="small muted">Renders cost compute time plus a $0.30 fee; failed renders are refunded in full. Payments are collected by DTECH SOFTWARE LAB ENTERPRISE (Nigeria); wallet credit is non-transferable, non-cash, and ClipWeave-only.</p>
     {error && <p className="form-error" role="alert">{error}</p>}
     <div className="modal-footer">
       <button className="button secondary" onClick={() => void onRefresh()}>Refresh balance</button>
-      <button className="button primary" disabled={busy || Number(amount) < 5} onClick={checkoutKorapay}><CreditCard size={16} /> {busy ? "Opening…" : "Add funds"}</button>
+      <button className="button primary" disabled={busy || usdEquivalent === null || usdEquivalent < 5 || usdEquivalent > 1000} onClick={checkoutKorapay}><CreditCard size={16} /> {busy ? "Opening…" : "Add funds"}</button>
     </div>
   </Modal>;
 }

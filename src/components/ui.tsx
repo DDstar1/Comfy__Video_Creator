@@ -50,16 +50,24 @@ export function Modal({
   children,
   onClose,
   wide = false,
+  onDialogReady,
 }: {
   title: string;
   eyebrow?: string;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
+  // Native <dialog> shown via showModal() renders in the browser's top
+  // layer, above every ordinary element regardless of z-index -- including
+  // a third-party payment widget's own injected overlay. A caller that needs
+  // to yield the top layer temporarily (Korapay's checkout modal) gets the
+  // element here rather than Modal exposing a wider imperative API.
+  onDialogReady?: (dialog: HTMLDialogElement | null) => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const dialog = ref.current;
+    onDialogReady?.(dialog);
     const previousFocus = document.activeElement as HTMLElement | null;
     dialog?.showModal();
     dialog
@@ -69,6 +77,7 @@ export function Modal({
       ?.focus();
     return () => {
       dialog?.close();
+      onDialogReady?.(null);
       if (previousFocus?.isConnected) previousFocus.focus();
     };
   }, []);

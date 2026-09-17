@@ -482,6 +482,7 @@ img {
 .wallet-balance span { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
 .wallet-balance strong { display: block; margin: 5px 0; font-size: 34px; color: #30422a; }
 .wallet-balance small { color: #6d7b63; }
+.wallet-quote { display: grid; grid-template-columns: max-content max-content max-content; column-gap: 8px; row-gap: 4px; margin-bottom: 16px; }
 .save-indicator {
   display: flex;
   align-items: center;

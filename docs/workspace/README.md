@@ -80,10 +80,19 @@ keys exist yet, so checkout still cannot complete.
 **Later still.** Keys were added, but the real blocker was
 `KORAPAY_NGN_PER_USD` still holding the literal placeholder text
 `your_chosen_rate` (`Number(...)` on that is `NaN`). Per request, the static
-rate is retired entirely: `exchange-rate.ts` fetches USD→NGN live from a free
-keyless feed (refreshes once a day, confirmed working) and the route adds a
-flat `KORAPAY_NGN_MARGIN` (₦300 default) on top; a feed outage fails checkout
-closed rather than guessing. `.env` now has `KORAPAY_NGN_MARGIN=300`.
+rate is retired entirely: `exchange-rate.ts` fetches USD→NGN live; a feed
+outage fails checkout closed rather than guessing.
+
+**Later still.** The feed switched from a generic global rate to
+abokidollar.com's Black Market Sell Rate (primary, no bot protection,
+confirmed live) falling back to Nigeria Customs' gazetted rate (backup only —
+it updates on a multi-week schedule) if Aboki fails. Western Union's own rate
+API was checked and rejected: session-bound, behind Akamai bot detection, not
+a public feed. The flat `KORAPAY_NGN_MARGIN` (₦300) has been removed per
+request — no markup on top of the live rate anymore. A top-up preview token
+count (`converted dollars × 10`, a relabeling of the same USD-cent credit, no
+schema change) now shows in the wallet dialog. See `frontend/README.md` for
+the full account.
 
 
 ## Current product state — 2026-09-13
@@ -394,7 +403,6 @@ KORAPAY_PUBLIC_KEY_TEST=YOUR_KORAPAY_TEST_PUBLIC_KEY
 KORAPAY_SECRET_KEY_TEST=YOUR_KORAPAY_TEST_SECRET_KEY
 KORAPAY_PUBLIC_KEY_LIVE=YOUR_KORAPAY_LIVE_PUBLIC_KEY
 KORAPAY_SECRET_KEY_LIVE=YOUR_KORAPAY_LIVE_SECRET_KEY
-KORAPAY_NGN_MARGIN=300
 RUNPOD_GPU_RATE_CENTS_PER_HOUR=58
 CLIPWEAVE_MARGIN_CENTS=30
 ```

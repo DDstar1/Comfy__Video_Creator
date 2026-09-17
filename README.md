@@ -246,19 +246,41 @@ template, so `Number(...)` produced `NaN` and checkout refused to start — this
 is exactly the "refuse rather than guess" behavior working as designed, just
 against an unfilled placeholder rather than a real misconfiguration.
 
-Per request, the static rate is now replaced entirely with a live one.
-`src/lib/server/exchange-rate.ts` fetches USD→NGN from
-`https://open.er-api.com/v6/latest/USD` — a free, keyless feed, confirmed live
-to actually return an `NGN` rate — cached in memory for one hour to avoid a
-network call on every checkout. **This feed refreshes once a day, not
-tick-by-tick** (`time_next_update_utc` in its own response is ~24h after
-`time_last_update_utc`), so "dynamic" here means "no hardcoded number," not
-real-time market pricing. The checkout route adds a flat `KORAPAY_NGN_MARGIN`
-(₦300 by default) on top of that live rate rather than a percentage. If the
-feed is unreachable, checkout now fails closed with "Live exchange rate is
+Per request, the static rate is now replaced entirely with a live one, cached
+in memory for one hour to avoid a network call on every checkout. If the feed
+is unreachable, checkout fails closed with "Live exchange rate is
 unavailable" instead of guessing a rate — consistent with the existing
 "never silently default a money-affecting rate" rule in this codebase.
-`KORAPAY_NGN_PER_USD` is retired; `.env` now has `KORAPAY_NGN_MARGIN=300`.
+`KORAPAY_NGN_PER_USD` is retired.
+
+**Later still — source swap and margin removed.** The live feed
+(`src/lib/server/exchange-rate.ts`) switched from a generic global rate
+(`open.er-api.com`, daily-refreshed) to two Nigeria-specific sources: primary
+is **abokidollar.com's Black Market Sell Rate** (confirmed callable
+server-side with a plain unauthenticated GET, no bot protection — closest to
+what a business actually pays for dollars in Nigeria; its own "CBN" rows
+showed an inconsistent buy/sell spread, so only the Black Market row is
+used), falling back to the **Nigeria Customs Service's** officially gazetted
+rate only if Aboki is unreachable (Customs updates on its own multi-week
+schedule — confirmed live via `effectiveDate` lagging the requested date by
+over three weeks — which is why it's the fallback, not the primary). Western
+Union's own rate-quote endpoint was checked and explicitly rejected: it's a
+session-bound API behind Akamai bot-detection cookies (`bm_sz`, `ak_bmsc`,
+`_abck`), not a public feed, and calling it server-side would mean
+deliberately bypassing that protection.
+
+The flat `KORAPAY_NGN_MARGIN` (₦300) has since been removed entirely per
+request — checkout now charges the live rate with no markup on top. The $5
+minimum / $1000 maximum wallet-credit bounds are still enforced by converting
+at the live rate (a detour through a flat ₦500, then ₦5000, NGN-only minimum
+was tried and reverted back to the live-rate-derived $5 floor, since a flat
+NGN number drifts out of sync with the rate over time).
+
+**Tokens.** The top-up preview now also shows a customer-facing token count,
+defined as `converted dollars × 10` — a fixed 1-token-=-$0.10 relabeling of
+the same USD-cent wallet credit already stored, not a new ledger unit, column,
+or RPC change. It's shown only in the wallet dialog's live preview; the
+"Available credit" balance elsewhere still reads in dollars.
 
 
 ## Current product state — 2026-09-13
@@ -542,7 +564,6 @@ KORAPAY_PUBLIC_KEY_TEST=YOUR_KORAPAY_TEST_PUBLIC_KEY
 KORAPAY_SECRET_KEY_TEST=YOUR_KORAPAY_TEST_SECRET_KEY
 KORAPAY_PUBLIC_KEY_LIVE=YOUR_KORAPAY_LIVE_PUBLIC_KEY
 KORAPAY_SECRET_KEY_LIVE=YOUR_KORAPAY_LIVE_SECRET_KEY
-KORAPAY_NGN_MARGIN=300
 RUNPOD_GPU_RATE_CENTS_PER_HOUR=58
 CLIPWEAVE_MARGIN_CENTS=30
 ```

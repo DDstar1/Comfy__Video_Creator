@@ -4,11 +4,6 @@ import { adminClient } from "@/lib/server/admin";
 import { getKorapayMode, korapayKeys } from "@/lib/server/korapay-config";
 import { liveNgnPerUsd } from "@/lib/server/exchange-rate";
 
-// Flat margin added on top of the live USD->NGN rate, chosen by the business
-// rather than a percentage -- ₦300 covers roughly a stable slice of margin
-// regardless of the underlying rate's daily movement.
-const KORAPAY_NGN_MARGIN = Number(process.env.KORAPAY_NGN_MARGIN ?? 300);
-
 // Supabase errors are plain objects, not Error instances, so
 // `error instanceof Error` misses them and hides the real cause behind a
 // generic message -- this happened for real when the Korapay migrations
@@ -20,10 +15,17 @@ function errorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
+function formatNgn(value: number) {
+  return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(value);
+}
+
 export const runtime = "nodejs";
-// Same bounds as the Creem top-up, kept identical so the wallet UI does not
-// need to know which provider is active.
-const inputSchema = z.object({ amountUsd: z.number().min(5).max(1000) });
+// The customer enters and is charged an NGN amount directly (not a USD
+// amount converted to NGN behind the scenes). Both the $5 minimum and $1000
+// maximum wallet-credit bounds are enforced after converting at the live
+// rate, so the actual NGN floor/ceiling shown to the customer always tracks
+// today's rate rather than drifting stale like a hardcoded NGN number would.
+const inputSchema = z.object({ amountNgn: z.number().positive() });
 
 export async function POST(request: Request) {
   try {
@@ -33,21 +35,27 @@ export async function POST(request: Request) {
     const mode = await getKorapayMode();
     const { publicKey } = korapayKeys(mode);
     if (!publicKey) throw new Error(`Korapay ${mode} checkout is not configured yet.`);
-    // Rate is fetched live rather than read from a static env var, plus the
-    // fixed margin above -- refusing to start checkout when the feed is down
-    // is deliberate -- a guessed rate would silently over- or under-charge
-    // every customer, which a temporary outage doesn't justify risking.
-    const ngnPerUsd = (await liveNgnPerUsd()) + KORAPAY_NGN_MARGIN;
+    // Rate is fetched live rather than read from a static env var -- no
+    // margin added on top anymore. Refusing to start checkout when the feed
+    // is down is deliberate -- a guessed rate would silently over- or
+    // under-charge every customer, which a temporary outage doesn't justify.
+    const ngnPerUsd = await liveNgnPerUsd();
     const { user } = await authenticatedClient(request);
     const admin = adminClient();
-    const { amountUsd } = inputSchema.parse(await request.json());
-    const amountCents = Math.round(amountUsd * 100);
+    const { amountNgn } = inputSchema.parse(await request.json());
+    const amountUsd = amountNgn / ngnPerUsd;
+    if (amountUsd < 5 || amountUsd > 1000)
+      throw new Error(`Enter an amount between ${formatNgn(5 * ngnPerUsd)} and ${formatNgn(1000 * ngnPerUsd)}.`);
     // Korapay's documented examples (pre-auth/capture/void/refund) all use
     // decimal major-unit values ("10.00", "3"), not kobo -- verified against
     // their docs, not assumed. Confirm against one real sandbox charge before
     // trusting this in production; getting this wrong is a 100x billing bug.
-    const amountNgn = Math.round(amountUsd * ngnPerUsd * 100) / 100;
-    const reference = `clipweave-korapay-${crypto.randomUUID()}`;
+    const amountCents = Math.round(amountUsd * 100);
+    // Korapay caps reference at 50 characters; "clipweave-korapay-" plus a
+    // full hyphenated UUID was 54 -- confirmed live via a real 422
+    // validation_error. Dropping the hyphens keeps full UUID entropy in 32
+    // characters, well under the limit.
+    const reference = `clipweave-${crypto.randomUUID().replace(/-/g, "")}`;
     const { error } = await admin.from("comfyTR_payment_transactions").insert({
       owner_id: user.id, provider: "korapay", provider_reference: reference,
       amount_cents: amountCents, currency: "USD",
@@ -67,5 +75,17 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     return Response.json({ error: errorMessage(error, "Checkout could not be started.") }, { status: error instanceof z.ZodError ? 400 : 502 });
+  }
+}
+
+// Read-only rate lookup so the wallet UI can show a live NGN preview as the
+// customer types, without starting a checkout (no transaction row, no auth
+// needed -- the rate is not sensitive; anyone could derive it from a real
+// checkout amount anyway).
+export async function GET() {
+  try {
+    return Response.json({ ngnPerUsd: await liveNgnPerUsd() });
+  } catch (error) {
+    return Response.json({ error: errorMessage(error, "Live exchange rate is unavailable.") }, { status: 503 });
   }
 }
