@@ -8,7 +8,7 @@ const voices = 'comfyTR_platform_voices';
 const schema = z.object({ name: z.string().trim().min(1).max(80), voiceDescription: z.string().trim().min(1).max(1000), sampleText: z.string().trim().min(1).max(2000), language: z.string().trim().min(1).max(40).default('English'), seed: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER) });
 
 function endpoint() {
-  const key = process.env.RUNPOD_ENDPOINT_API_KEY;
+  const key = process.env.RUNPOD_ACCOUNT_API_KEY ?? process.env.RUNPOD_ENDPOINT_API_KEY;
   const id = process.env.RUNPOD_QWEN_TTS_ENDPOINT_ID;
   if (!key || !id) throw new Error('Qwen voice endpoint is not configured. Set RUNPOD_QWEN_TTS_ENDPOINT_ID on the web deployment.');
   return { key, id };

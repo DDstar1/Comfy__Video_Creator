@@ -10,7 +10,7 @@ export async function GET(request: Request, context: { params: Promise<{ voiceId
     const { voiceId } = await context.params; const db = adminClient();
     const { data: voice, error } = await db.from(voices).select('*').eq('id', voiceId).single(); if (error || !voice) return Response.json({ error: 'Voice not found.' }, { status: 404 });
     if (!voice.runpod_job_id || !['queued', 'running'].includes(voice.status)) return Response.json({ voice });
-    const key = process.env.RUNPOD_ENDPOINT_API_KEY, endpoint = process.env.RUNPOD_QWEN_TTS_ENDPOINT_ID;
+    const key = process.env.RUNPOD_ACCOUNT_API_KEY ?? process.env.RUNPOD_ENDPOINT_API_KEY, endpoint = process.env.RUNPOD_QWEN_TTS_ENDPOINT_ID;
     if (!key || !endpoint) return Response.json({ voice });
     const response = await fetch(`https://api.runpod.ai/v2/${endpoint}/status/${encodeURIComponent(voice.runpod_job_id)}`, { headers: { Authorization: `Bearer ${key}` }, cache: 'no-store' });
     const remote = await response.json().catch(() => ({})); const state = String(remote.status ?? '').toUpperCase();
