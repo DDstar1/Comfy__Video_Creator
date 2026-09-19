@@ -7,7 +7,8 @@
 .admin h2 { font-family: inherit; font-size: 19px; margin: 0 0 20px; }
 .admin h3 { font-family: inherit; font-size: 15px; }
 .admin section { padding: 24px 0; border-bottom: 1px solid #d7dcdf; }
-.admin button, .admin input, .admin select { min-height: 44px; border: 1px solid #b9c3c9; border-radius: 5px; background: white; padding: 8px 12px; color: inherit; font: inherit; max-width: 100%; }
+.admin button, .admin input, .admin select, .admin textarea { min-height: 44px; border: 1px solid #b9c3c9; border-radius: 5px; background: white; padding: 8px 12px; color: inherit; font: inherit; max-width: 100%; }
+.admin textarea { min-height: 92px; resize: vertical; }
 .admin button { cursor: pointer; }
 .admin button:disabled { opacity: .45; cursor: default; }
 .admin :focus-visible { outline: 2px solid #14746b; outline-offset: 3px; }
